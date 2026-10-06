@@ -3,6 +3,8 @@
 use App\Http\Controllers\Api\V1\AddressLookupController;
 use App\Http\Controllers\Api\V1\AppointmentController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
+use App\Http\Controllers\Api\V1\BillController;
+use App\Http\Controllers\Api\V1\CashFlowController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceController;
@@ -11,6 +13,8 @@ use App\Http\Controllers\Api\V1\MechanicController;
 use App\Http\Controllers\Api\V1\PartController;
 use App\Http\Controllers\Api\V1\PlateLookupController;
 use App\Http\Controllers\Api\V1\Public\PublicBudgetController;
+use App\Http\Controllers\Api\V1\Public\PublicSurveyController;
+use App\Http\Controllers\Api\V1\RecurringBillController;
 use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\SearchController;
 use App\Http\Controllers\Api\V1\ServiceOrderController;
@@ -19,6 +23,7 @@ use App\Http\Controllers\Api\V1\ServiceOrderPaymentController;
 use App\Http\Controllers\Api\V1\ServiceOrderPdfController;
 use App\Http\Controllers\Api\V1\ServiceReminderController;
 use App\Http\Controllers\Api\V1\ShopSettingsController;
+use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\UserController;
 use App\Http\Controllers\Api\V1\VehicleCatalogController;
 use App\Http\Controllers\Api\V1\VehicleHistoryController;
@@ -45,6 +50,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('/', 'show')->name('show');
             Route::post('approve', 'approve')->name('approve');
             Route::post('reject', 'reject')->name('reject');
+        });
+
+    // Pesquisa de satisfação (link assinado enviado depois da entrega)
+    Route::prefix('public/surveys/{token}')
+        ->name('public.surveys.')
+        ->where(['token' => '[0-9]+\.[0-9]+\.[a-f0-9]{32}'])
+        ->middleware('throttle:public')
+        ->controller(PublicSurveyController::class)
+        ->group(function () {
+            Route::get('/', 'show')->name('show');
+            Route::post('/', 'answer')->name('answer');
         });
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
@@ -75,6 +91,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('items', 'addItem')->name('items.store');
             Route::patch('items/{item}', 'toggleItem')->whereNumber('item')->name('items.toggle');
             Route::put('items/{item}/mechanic', 'assignMechanic')->whereNumber('item')->name('items.mechanic');
+            // Retorno em garantia (OS original do mesmo veículo, dentro do prazo)
+            Route::get('warranty/candidates', 'warrantyCandidates')->name('warranty.candidates');
+            Route::post('warranty', 'linkWarranty')->name('warranty.link');
+            Route::delete('warranty', 'unlinkWarranty')->name('warranty.unlink');
             Route::delete('items/{item}', 'removeItem')->whereNumber('item')->name('items.destroy');
             Route::post('parts', 'addPart')->name('parts.store');
             Route::delete('parts/{part}', 'removePart')->whereNumber('part')->name('parts.destroy');
@@ -94,6 +114,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Recebimentos da OS (registrar: financeiro; remover: só master)
         Route::post('service-orders/{service_order}/payments', [ServiceOrderPaymentController::class, 'store'])->name('service-orders.payments.store');
+        Route::get('service-orders/{service_order}/pix', [ServiceOrderPaymentController::class, 'pix'])->name('service-orders.pix');
         Route::delete('service-orders/{service_order}/payments/{payment}', [ServiceOrderPaymentController::class, 'destroy'])
             ->whereNumber('payment')
             ->name('service-orders.payments.destroy');
@@ -102,9 +123,19 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('receivables', [FinanceController::class, 'receivables'])->name('receivables.index');
         Route::get('payments', [FinanceController::class, 'payments'])->name('payments.index');
 
+        // Contas a pagar, despesas fixas, fornecedores e fluxo de caixa (financeiro)
+        Route::apiResource('suppliers', SupplierController::class)->except('show');
+        Route::post('bills/{bill}/pay', [BillController::class, 'pay'])->name('bills.pay');
+        Route::post('bills/{bill}/unpay', [BillController::class, 'unpay'])->name('bills.unpay');
+        Route::apiResource('bills', BillController::class)->except('show');
+        Route::apiResource('recurring-bills', RecurringBillController::class)->except('show');
+        Route::get('cash-flow', [CashFlowController::class, 'show'])->name('cash-flow.show');
+        Route::get('settings/finance', [CashFlowController::class, 'settings'])->name('settings.finance.show');
+        Route::put('settings/finance', [CashFlowController::class, 'updateSettings'])->name('settings.finance.update');
+
         // Relatórios (JSON para a tela, ?format=csv para exportar)
         Route::get('reports/{report}', ReportController::class)
-            ->whereIn('report', ['revenue', 'services', 'customers', 'mechanics'])
+            ->whereIn('report', ['revenue', 'services', 'customers', 'mechanics', 'warranty', 'satisfaction'])
             ->name('reports.show');
 
         // PDFs da OS: orçamento (para o cliente aprovar) e comprovante do serviço realizado
@@ -115,6 +146,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // Dados da oficina (cabeçalho dos PDFs); alterar é só para o master
         Route::get('settings/shop', [ShopSettingsController::class, 'show'])->name('settings.shop.show');
         Route::put('settings/shop', [ShopSettingsController::class, 'update'])->name('settings.shop.update');
+        Route::get('settings/backup', [ShopSettingsController::class, 'backup'])->name('settings.backup');
 
         // Histórico de serviços do veículo
         Route::get('vehicles/{vehicle}/history', VehicleHistoryController::class)->whereNumber('vehicle')->name('vehicles.history');

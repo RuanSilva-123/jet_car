@@ -8,6 +8,9 @@ use App\Http\Resources\ServiceOrderResource;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderPayment;
 use App\Services\ServiceOrders\PaymentManager;
+use App\Support\Pix\PixCharge;
+use App\Support\ShopSettings;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\Rule;
@@ -42,6 +45,28 @@ class ServiceOrderPaymentController extends Controller
         $this->payments->register($serviceOrder, $data, $request->user());
 
         return $this->detail($serviceOrder);
+    }
+
+    /**
+     * Cobrança Pix da OS (copia e cola + QR Code). Padrão: o saldo em aberto.
+     * 404 quando a oficina não cadastrou a chave Pix ou não há o que cobrar.
+     */
+    public function pix(Request $request, ServiceOrder $serviceOrder): JsonResponse
+    {
+        Gate::authorize('manage-finance');
+
+        $data = $request->validate([
+            'amount_cents' => ['nullable', 'integer', 'min:1', 'max:'.max(1, $serviceOrder->balanceCents())],
+        ], ['amount_cents.*' => 'Valor do Pix inválido (no máximo o saldo em aberto).']);
+
+        if (! PixCharge::configured(ShopSettings::get())) {
+            return response()->json(['message' => 'Cadastre a chave Pix em Dados da oficina.'], 404);
+        }
+
+        $charge = PixCharge::forOrder($serviceOrder, $data['amount_cents'] ?? null);
+        abort_if($charge === null, 404, 'Não há saldo em aberto nesta OS.');
+
+        return response()->json(['data' => $charge]);
     }
 
     public function destroy(Request $request, ServiceOrder $serviceOrder, ServiceOrderPayment $payment): ServiceOrderResource

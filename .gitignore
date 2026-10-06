@@ -1,2 +1,4 @@
 .env
+# Backups do banco e das fotos (container backup)
+/backups/
 !.env.example

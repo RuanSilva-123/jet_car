@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** Serviço (mão de obra) dentro de uma OS. */
-#[Fillable(['labor_service_id', 'name', 'notes', 'price_cents', 'position'])]
+#[Fillable(['labor_service_id', 'warranty_of_item_id', 'name', 'notes', 'price_cents', 'position'])]
 class ServiceOrderItem extends Model
 {
     /**
@@ -29,6 +29,16 @@ class ServiceOrderItem extends Model
     public function serviceOrder(): BelongsTo
     {
         return $this->belongsTo(ServiceOrder::class);
+    }
+
+    /**
+     * Serviço original refeito na garantia.
+     *
+     * @return BelongsTo<ServiceOrderItem, $this>
+     */
+    public function warrantyOf(): BelongsTo
+    {
+        return $this->belongsTo(ServiceOrderItem::class, 'warranty_of_item_id');
     }
 
     /**

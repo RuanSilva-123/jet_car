@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Enums\ServiceOrderStatus;
 use App\Models\ServiceOrder;
 use App\Support\BudgetLink;
+use App\Support\SurveyLink;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,7 +15,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class ServiceOrderResource extends JsonResource
 {
     /** Relações carregadas no detalhe da OS. */
-    public const DETAIL_RELATIONS = ['customer', 'vehicle', 'creator', 'items.doneBy', 'items.mechanic', 'parts', 'payments.receiver', 'inspection', 'events.user'];
+    public const DETAIL_RELATIONS = ['customer', 'vehicle', 'creator', 'items.doneBy', 'items.mechanic', 'parts', 'payments.receiver', 'inspection', 'warrantyOf', 'warrantyReturns', 'events.user'];
 
     /**
      * @return array<string, mixed>
@@ -27,6 +29,22 @@ class ServiceOrderResource extends JsonResource
             'status_label' => $this->status->label(),
             'is_final' => $this->status->isFinal(),
             'mileage' => $this->mileage,
+            // Retorno em garantia: id da OS original (null = OS normal)
+            'warranty_of_id' => $this->warranty_of_id,
+            'warranty_of' => $this->whenLoaded('warrantyOf', fn () => $this->warrantyOf ? [
+                'id' => $this->warrantyOf->id,
+                'number' => $this->warrantyOf->number(),
+                'delivered_at' => $this->warrantyOf->delivered_at?->toIso8601String(),
+                'warranty_until' => $this->warrantyOf->warrantyUntil()?->toDateString(),
+            ] : null),
+            'warranty_returns' => $this->whenLoaded('warrantyReturns', fn () => $this->warrantyReturns->map(fn ($return) => [
+                'id' => $return->id,
+                'number' => $return->number(),
+                'status_label' => $return->status->label(),
+                'created_at' => $return->created_at?->toIso8601String(),
+            ])),
+            // Detalhe: até quando vale a garantia (OS entregue)
+            'warranty_until' => $this->when($this->relationLoaded('items'), fn () => $this->warrantyUntil()?->toDateString()),
             'complaint' => $this->complaint,
             'notes' => $this->notes,
             'expected_at' => $this->expected_at?->toDateString(),
@@ -46,6 +64,16 @@ class ServiceOrderResource extends JsonResource
             'paid_cents' => $this->paid_cents,
             'balance_cents' => $this->balanceCents(),
             'payment_status' => $this->paymentStatus()->value,
+            // Pesquisa de satisfação (depois da entrega)
+            'survey_score' => $this->survey_score,
+            'survey_comment' => $this->survey_comment,
+            'survey_answered_at' => $this->survey_answered_at?->toIso8601String(),
+            'survey_url' => $this->when(
+                $this->relationLoaded('items'),
+                fn () => $this->status === ServiceOrderStatus::Delivered && $this->survey_answered_at === null
+                    ? SurveyLink::make($this->resource)['url']
+                    : null,
+            ),
             'payment_status_label' => $this->paymentStatus()->label(),
             'budget_sent_at' => $this->budget_sent_at?->toIso8601String(),
             'budget_approved_at' => $this->budget_approved_at?->toIso8601String(),
@@ -86,6 +114,7 @@ class ServiceOrderResource extends JsonResource
             'items' => $this->whenLoaded('items', fn () => $this->items->map(fn ($item) => [
                 'id' => $item->id,
                 'labor_service_id' => $item->labor_service_id,
+                'warranty_of_item_id' => $item->warranty_of_item_id,
                 'name' => $item->name,
                 'notes' => $item->notes,
                 'price_cents' => $item->price_cents,

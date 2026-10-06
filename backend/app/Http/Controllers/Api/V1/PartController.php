@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\ExpenseCategory;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Parts\SavePartRequest;
 use App\Http\Resources\PartResource;
 use App\Models\Part;
 use App\Models\StockMovement;
+use App\Services\Finance\BillManager;
 use App\Services\Inventory\StockManager;
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -15,11 +18,13 @@ use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 /** Estoque de peças: catálogo, entradas, ajustes de inventário e histórico de movimentação. */
 class PartController extends Controller
 {
-    public function __construct(private readonly StockManager $stock) {}
+    public function __construct(private readonly StockManager $stock, private readonly BillManager $bills) {}
 
     public function index(Request $request): AnonymousResourceCollection
     {
@@ -107,16 +112,46 @@ class PartController extends Controller
             'quantity' => ['required', 'numeric', 'min:0', 'max:999999'],
             'unit_cost_cents' => ['nullable', 'integer', 'min:0', 'max:100000000'],
             'notes' => ['nullable', 'string', 'max:500'],
+            // Compra: já lança a conta a pagar (quantidade × custo)
+            'create_bill' => ['nullable', 'boolean'],
+            'bill_due_date' => ['nullable', 'required_if:create_bill,true', 'date_format:Y-m-d'],
+            'bill_supplier_id' => ['nullable', 'integer', Rule::exists('suppliers', 'id')->whereNull('deleted_at')],
+            'bill_installments' => ['nullable', 'integer', 'min:1', 'max:48'],
         ], [
             'type.*' => 'Tipo de movimentação inválido.',
+            'bill_due_date.*' => 'Informe o vencimento da conta.',
+            'bill_supplier_id.exists' => 'Fornecedor não encontrado.',
+            'bill_installments.*' => 'Parcelas: de 1 a 48.',
             'quantity.required' => 'Informe a quantidade.',
             'quantity.*' => 'Quantidade inválida.',
             'unit_cost_cents.*' => 'Custo inválido.',
         ]);
 
-        $data['type'] === 'entry'
-            ? $this->stock->entry($part, (float) $data['quantity'], $data['unit_cost_cents'] ?? null, $data['notes'], $request->user())
-            : $this->stock->adjust($part, (float) $data['quantity'], $data['notes'], $request->user());
+        $createBill = $data['type'] === 'entry' && ($data['create_bill'] ?? false);
+        if ($createBill) {
+            abort_unless($request->user()->canManageFinance(), 403, 'Lançar conta a pagar é do financeiro.');
+            if (empty($data['unit_cost_cents'])) {
+                throw ValidationException::withMessages(['unit_cost_cents' => 'Informe o custo unitário para lançar a conta a pagar.']);
+            }
+        }
+
+        DB::transaction(function () use ($data, $part, $request, $createBill) {
+            $data['type'] === 'entry'
+                ? $this->stock->entry($part, (float) $data['quantity'], $data['unit_cost_cents'] ?? null, $data['notes'], $request->user())
+                : $this->stock->adjust($part, (float) $data['quantity'], $data['notes'], $request->user());
+
+            if ($createBill) {
+                $this->bills->create([
+                    'description' => 'Compra: '.$part->name.' ('.Money::quantity($data['quantity']).' '.$part->unit.')',
+                    'supplier_id' => $data['bill_supplier_id'] ?? null,
+                    'category' => ExpenseCategory::Parts->value,
+                    'amount_cents' => Money::multiply($data['quantity'], (int) $data['unit_cost_cents']),
+                    'due_date' => $data['bill_due_date'],
+                    'installments' => $data['bill_installments'] ?? 1,
+                    'notes' => $data['notes'],
+                ], $request->user());
+            }
+        });
 
         return new PartResource($part->fresh());
     }

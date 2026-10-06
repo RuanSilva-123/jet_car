@@ -1,5 +1,6 @@
 <?php
 
+use App\Services\Finance\BillManager;
 use App\Services\Reminders\ServiceReminderGenerator;
 use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
@@ -19,3 +20,12 @@ Artisan::command('jetcar:service-reminders', function (ServiceReminderGenerator 
 })->purpose('Gera a lista de clientes a contatar para revisão');
 
 Schedule::command('jetcar:service-reminders')->dailyAt('06:00')->withoutOverlapping()->onOneServer();
+
+/*
+| Despesas fixas: gera a conta a pagar do mês (aluguel, internet...). Idempotente.
+*/
+Artisan::command('jetcar:recurring-bills', function (BillManager $bills) {
+    $this->info('Contas geradas: '.$bills->generateRecurring().'.');
+})->purpose('Gera as contas do mês das despesas fixas');
+
+Schedule::command('jetcar:recurring-bills')->dailyAt('05:30')->withoutOverlapping()->onOneServer();

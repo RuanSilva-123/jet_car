@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Enums\ServiceOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\ServiceOrder;
 use App\Support\BrandLogo;
+use App\Support\LocalTime;
+use App\Support\Pix\PixCharge;
 use App\Support\ShopSettings;
 use Barryvdh\DomPDF\Facade\Pdf;
 use Illuminate\Http\Request;
@@ -26,7 +29,7 @@ class ServiceOrderPdfController extends Controller
     {
         Gate::authorize('view', $serviceOrder);
 
-        $order = $serviceOrder->load(['customer', 'vehicle', 'items.doneBy', 'parts', 'payments', 'creator', 'inspection']);
+        $order = $serviceOrder->load(['customer', 'vehicle', 'items.doneBy', 'parts', 'payments', 'creator', 'inspection', 'warrantyOf']);
 
         $filename = match ($document) {
             'budget' => 'Orcamento',
@@ -34,14 +37,20 @@ class ServiceOrderPdfController extends Controller
             default => 'Ordem-de-servico',
         }.'-'.$order->number().'.pdf';
 
-        $extra = $document === 'inspection' ? $this->inspectionImages($order) : [];
+        $extra = match ($document) {
+            'inspection' => $this->inspectionImages($order),
+            // Comprovante com saldo em aberto: Pix para o cliente pagar (OS cancelada não cobra)
+            'report' => ['pix' => $order->status === ServiceOrderStatus::Canceled ? null : PixCharge::forOrder($order)],
+            default => [],
+        };
 
         $pdf = Pdf::loadView("pdf.{$document}", [
             ...$extra,
             'order' => $order,
             'shop' => ShopSettings::get(),
             'logo' => BrandLogo::dataUri(),
-            'generatedAt' => now(),
+            // Horário da oficina no rodapé (o servidor roda em UTC)
+            'generatedAt' => LocalTime::now(),
         ])
             ->setPaper('a4')
             // Embute só os caracteres usados da fonte: arquivo bem menor

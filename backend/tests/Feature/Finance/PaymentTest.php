@@ -6,7 +6,10 @@ use App\Enums\ServiceOrderStatus;
 use App\Enums\UserRole;
 use App\Models\ServiceOrder;
 use App\Models\User;
+use App\Support\LocalTime;
+use App\Support\ShopSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 /**
@@ -123,6 +126,22 @@ class PaymentTest extends TestCase
             ->assertJsonPath('summary.total_cents', 3000)
             ->assertJsonPath('summary.by_method.0.method', 'pix')
             ->assertJsonPath('data.0.order.number', $order->number());
+    }
+
+    public function test_pdf_footer_uses_shop_timezone(): void
+    {
+        $this->travelTo(Carbon::parse('2026-10-06 20:41:00', 'UTC'));
+        $order = $this->approvedOrder(status: ServiceOrderStatus::Delivered);
+
+        $view = view('pdf.report', [
+            'order' => $order->load(['customer', 'vehicle', 'items', 'parts', 'payments']),
+            'shop' => ShopSettings::get(),
+            'logo' => '',
+            'generatedAt' => LocalTime::now(),
+            'pix' => null,
+        ])->render();
+
+        $this->assertStringContainsString('Emitido em 06/10/2026 às 17:41', $view);
     }
 
     public function test_report_pdf_shows_payments(): void

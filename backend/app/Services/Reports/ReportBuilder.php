@@ -7,6 +7,7 @@ use App\Models\ServiceOrder;
 use App\Models\ServiceOrderItem;
 use App\Models\ServiceOrderPayment;
 use App\Models\User;
+use App\Support\Nps;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
@@ -25,6 +26,8 @@ class ReportBuilder
         'services' => 'Serviços mais vendidos',
         'customers' => 'Clientes e retorno',
         'mechanics' => 'Produção dos mecânicos',
+        'warranty' => 'Retornos em garantia',
+        'satisfaction' => 'Satisfação dos clientes',
     ];
 
     private string $timezone;
@@ -53,6 +56,8 @@ class ReportBuilder
             'services' => $this->services($start, $end),
             'customers' => $this->customers($start, $end, (bool) ($options['only_returning'] ?? false)),
             'mechanics' => $this->mechanics($start, $end),
+            'warranty' => $this->warranty($start, $end),
+            'satisfaction' => $this->satisfaction($start, $end),
         };
 
         return [
@@ -139,8 +144,10 @@ class ReportBuilder
         $rows = ServiceOrderItem::query()
             ->whereIn('service_order_id', $orderIds)
             ->where('is_done', true)
+            // Serviço refeito na garantia não é venda
+            ->whereNull('warranty_of_item_id')
             ->get()
-            ->groupBy(fn (ServiceOrderItem $item) => $item->labor_service_id ? 'id:'.$item->labor_service_id : 'name:'.mb_strtolower($item->name))
+            ->groupBy(fn (ServiceOrderItem $item) => $this->serviceKey($item))
             ->map(function (Collection $items) {
                 $revenue = (int) $items->sum('price_cents');
 
@@ -227,6 +234,110 @@ class ReportBuilder
                 'returning_rate' => $customers ? round($returning / $customers * 100, 1) : 0.0,
             ],
         ];
+    }
+
+    /**
+     * Quais serviços mais voltam: retornos abertos no período por serviço, comparados com
+     * quantas vezes o serviço foi entregue no mesmo período, e quem tinha feito o serviço.
+     */
+    private function warranty(Carbon $start, Carbon $end): array
+    {
+        $returns = ServiceOrderItem::query()
+            ->whereNotNull('warranty_of_item_id')
+            ->whereHas('serviceOrder', fn ($query) => $query
+                ->whereBetween('created_at', [$start->copy()->utc(), $end->copy()->utc()])
+                ->where('status', '!=', ServiceOrderStatus::Canceled->value))
+            ->with(['warrantyOf.mechanic'])
+            ->get();
+
+        $deliveredIds = $this->deliveredOrders($start, $end)->pluck('id');
+        $executions = ServiceOrderItem::query()
+            ->whereIn('service_order_id', $deliveredIds)
+            ->where('is_done', true)
+            ->whereNull('warranty_of_item_id')
+            ->get()
+            ->groupBy(fn (ServiceOrderItem $item) => $this->serviceKey($item))
+            ->map->count();
+
+        $rows = $returns
+            ->groupBy(fn (ServiceOrderItem $item) => $this->serviceKey($item))
+            ->map(function (Collection $items, string $key) use ($executions) {
+                $done = (int) ($executions[$key] ?? 0);
+                $mechanics = $items->map(fn (ServiceOrderItem $item) => $item->warrantyOf?->mechanic?->name)->filter()->countBy()
+                    ->map(fn (int $count, string $name) => $count > 1 ? "{$name} ({$count})" : $name)->implode(', ');
+
+                return [
+                    'name' => $items->last()->name,
+                    'returns' => $items->count(),
+                    'executions' => $done,
+                    'rate' => $done ? round($items->count() / $done * 100, 1) : null,
+                    'mechanics' => $mechanics ?: null,
+                ];
+            })
+            ->sortByDesc('returns')
+            ->values();
+
+        $orders = $returns->pluck('service_order_id')->unique()->count();
+        $delivered = $deliveredIds->count();
+
+        return [
+            'columns' => [
+                ['key' => 'name', 'label' => 'Serviço', 'type' => 'text'],
+                ['key' => 'returns', 'label' => 'Retornos', 'type' => 'int'],
+                ['key' => 'executions', 'label' => 'Entregues no período', 'type' => 'int'],
+                ['key' => 'rate', 'label' => 'Taxa de retorno', 'type' => 'percent'],
+                ['key' => 'mechanics', 'label' => 'Quem fez o serviço', 'type' => 'text'],
+            ],
+            'rows' => $rows->all(),
+            'totals' => ['name' => 'Total', 'returns' => (int) $rows->sum('returns'), 'executions' => null, 'rate' => null, 'mechanics' => null],
+            'summary' => [
+                'returns' => $orders,
+                'delivered' => $delivered,
+                'return_rate' => $delivered ? round($orders / $delivered * 100, 1) : 0.0,
+            ],
+        ];
+    }
+
+    /** Avaliações respondidas no período, com o NPS. */
+    private function satisfaction(Carbon $start, Carbon $end): array
+    {
+        $orders = ServiceOrder::query()
+            ->whereNotNull('survey_answered_at')
+            ->whereBetween('survey_answered_at', [$start->copy()->utc(), $end->copy()->utc()])
+            ->with(['customer', 'vehicle'])
+            ->orderBy('survey_score')
+            ->orderByDesc('survey_answered_at')
+            ->get();
+
+        return [
+            'columns' => [
+                ['key' => 'answered_at', 'label' => 'Data', 'type' => 'date'],
+                ['key' => 'number', 'label' => 'OS', 'type' => 'text'],
+                ['key' => 'customer', 'label' => 'Cliente', 'type' => 'text'],
+                ['key' => 'vehicle', 'label' => 'Veículo', 'type' => 'text'],
+                ['key' => 'score', 'label' => 'Nota', 'type' => 'int'],
+                ['key' => 'comment', 'label' => 'Comentário', 'type' => 'text'],
+            ],
+            // Piores notas primeiro: é o que precisa de atenção
+            'rows' => $orders->map(fn (ServiceOrder $order) => [
+                'answered_at' => $order->survey_answered_at->copy()->timezone($this->timezone)->toDateString(),
+                'number' => $order->number(),
+                'order_id' => $order->id,
+                'customer' => $order->customer->trade_name ?: $order->customer->name,
+                'vehicle' => trim($order->vehicle->brand.' '.$order->vehicle->model),
+                'score' => $order->survey_score,
+                'category' => Nps::category($order->survey_score),
+                'comment' => $order->survey_comment,
+            ])->all(),
+            'totals' => null,
+            'summary' => Nps::summarize($orders->pluck('survey_score')),
+        ];
+    }
+
+    /** Mesmo serviço do catálogo (ou mesmo nome, se foi excluído do catálogo). */
+    private function serviceKey(ServiceOrderItem $item): string
+    {
+        return $item->labor_service_id ? 'id:'.$item->labor_service_id : 'name:'.mb_strtolower($item->name);
     }
 
     private function mechanics(Carbon $start, Carbon $end): array

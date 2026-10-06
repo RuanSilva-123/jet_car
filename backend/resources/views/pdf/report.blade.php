@@ -1,6 +1,7 @@
 @extends('pdf.layout')
 
 @php
+    use App\Support\LocalTime;
     use App\Support\Money;
 
     $pendingItems = $order->items->where('is_done', false);
@@ -10,10 +11,14 @@
 @section('title', 'Ordem de serviço '.$order->number())
 
 @section('totals-aside')
+    @if ($order->warrantyOf)
+        <div class="label">Garantia</div>
+        <p class="strong">Retorno em garantia da OS {{ $order->warrantyOf->number() }}: os serviços marcados como "Garantia" não são cobrados.</p>
+    @endif
     @if ($order->budget_approved_at)
         <div class="label">Aprovação</div>
         <p class="strong">
-            Orçamento aprovado pelo cliente em {{ $order->budget_approved_at->format('d/m/Y') }}
+            Orçamento aprovado pelo cliente em {{ LocalTime::format($order->budget_approved_at, 'd/m/Y') }}
             <span style="white-space: nowrap;">({{ Money::format($order->budget_approved_total_cents ?? $order->total_cents) }}).</span>
         </p>
     @endif
@@ -39,12 +44,12 @@
             <td style="width: 58mm; vertical-align: bottom;">
                 <table class="doc-meta">
                     <tr><td class="label">Situação</td><td class="value">{{ $order->status->label() }}</td></tr>
-                    <tr><td class="label">Entrada</td><td class="value">{{ $order->created_at->format('d/m/Y') }}</td></tr>
+                    <tr><td class="label">Entrada</td><td class="value">{{ LocalTime::format($order->created_at, 'd/m/Y') }}</td></tr>
                     @if ($order->completed_at)
-                        <tr><td class="label">Conclusão</td><td class="value">{{ $order->completed_at->format('d/m/Y') }}</td></tr>
+                        <tr><td class="label">Conclusão</td><td class="value">{{ LocalTime::format($order->completed_at, 'd/m/Y') }}</td></tr>
                     @endif
                     @if ($order->delivered_at)
-                        <tr><td class="label">Entrega</td><td class="value">{{ $order->delivered_at->format('d/m/Y') }}</td></tr>
+                        <tr><td class="label">Entrega</td><td class="value">{{ LocalTime::format($order->delivered_at, 'd/m/Y') }}</td></tr>
                     @endif
                 </table>
             </td>
@@ -86,13 +91,15 @@
                                 @if ($item->is_done)
                                     <span class="done">✓ Realizado</span>
                                     @if ($item->done_at)
-                                        <small>em {{ $item->done_at->format('d/m/Y') }}</small>
+                                        <small>em {{ LocalTime::format($item->done_at, 'd/m/Y') }}</small>
                                     @endif
                                 @else
                                     <span class="not-done">{{ $isFinished ? 'Não realizado' : 'Pendente' }}</span>
                                 @endif
                             </td>
-                            @if ($item->price_cents === null)
+                            @if ($item->warranty_of_item_id)
+                                <td class="right money done">Garantia</td>
+                            @elseif ($item->price_cents === null)
                                 <td class="right money tbd">a definir</td>
                             @else
                                 <td class="right money">{{ Money::format($item->price_cents) }}</td>
@@ -107,6 +114,21 @@
     @include('pdf.partials.parts-table', ['title' => $isFinished ? 'Peças utilizadas' : 'Peças'])
 
     @include('pdf.partials.totals', ['showPayments' => true])
+
+    @if (! empty($pix))
+        <table class="pix">
+            <tr>
+                <td class="pix__qr"><img src="{{ $pix['qr_code'] }}" alt="QR Code Pix"></td>
+                <td class="pix__text">
+                    <div class="label">Pague com Pix</div>
+                    <p class="pix__amount">{{ Money::format($pix['amount_cents']) }}</p>
+                    <p>Aponte a câmera do app do banco para o QR Code ou use o Pix copia e cola:</p>
+                    <p class="pix__code">{{ $pix['payload'] }}</p>
+                    <p class="pix__who">Recebedor: {{ $pix['beneficiary'] }}</p>
+                </td>
+            </tr>
+        </table>
+    @endif
 
     @if ($order->payments->isNotEmpty())
         <div class="section">

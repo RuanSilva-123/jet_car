@@ -13,6 +13,7 @@ use App\Models\ServiceOrderItem;
 use App\Models\ServiceOrderPart;
 use App\Models\User;
 use App\Services\ServiceOrders\ServiceOrderManager;
+use App\Support\ShopSettings;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -135,6 +136,51 @@ class ServiceOrderController extends Controller
 
         $data = $request->validate(['is_done' => ['required', 'boolean']]);
         $this->orders->setItemDone($serviceOrder, $item, (bool) $data['is_done'], $request->user());
+
+        return $this->detail($serviceOrder);
+    }
+
+    /** OS do mesmo veículo ainda na garantia, com os serviços feitos (para marcar o retorno). */
+    public function warrantyCandidates(ServiceOrder $serviceOrder): JsonResponse
+    {
+        Gate::authorize('view', $serviceOrder);
+
+        $days = (int) ShopSettings::get()['warranty_days'];
+
+        return response()->json([
+            'data' => $this->orders->warrantyCandidates($serviceOrder)->map(fn (ServiceOrder $order) => [
+                'id' => $order->id,
+                'number' => $order->number(),
+                'delivered_at' => $order->delivered_at?->toIso8601String(),
+                'warranty_until' => $order->warrantyUntil()?->toDateString(),
+                'items' => $order->items->map(fn (ServiceOrderItem $item) => ['id' => $item->id, 'name' => $item->name]),
+            ])->values(),
+            'warranty_days' => $days,
+        ]);
+    }
+
+    public function linkWarranty(Request $request, ServiceOrder $serviceOrder): ServiceOrderResource
+    {
+        Gate::authorize('update', $serviceOrder);
+
+        $data = $request->validate([
+            'warranty_of_id' => ['required', 'integer', Rule::exists('service_orders', 'id')],
+            'item_ids' => ['present', 'array', 'max:50'],
+            'item_ids.*' => ['integer'],
+        ], [
+            'warranty_of_id.required' => 'Escolha a OS original.',
+            'warranty_of_id.exists' => 'OS original não encontrada.',
+        ]);
+
+        $this->orders->linkWarranty($serviceOrder, ServiceOrder::findOrFail($data['warranty_of_id']), array_map('intval', $data['item_ids']), $request->user());
+
+        return $this->detail($serviceOrder);
+    }
+
+    public function unlinkWarranty(Request $request, ServiceOrder $serviceOrder): ServiceOrderResource
+    {
+        Gate::authorize('update', $serviceOrder);
+        $this->orders->unlinkWarranty($serviceOrder, $request->user());
 
         return $this->detail($serviceOrder);
     }

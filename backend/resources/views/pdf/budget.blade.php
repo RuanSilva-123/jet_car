@@ -2,15 +2,21 @@
 
 @php
     use App\Support\BrFormat;
+    use App\Support\LocalTime;
     use App\Support\Money;
 
-    $issuedAt = $order->budget_sent_at ?? now();
+    // Horário da oficina (o banco guarda em UTC)
+    $issuedAt = LocalTime::of($order->budget_sent_at) ?? LocalTime::now();
     $validUntil = $issuedAt->copy()->addDays($shop['budget_validity_days']);
 @endphp
 
 @section('title', 'Orçamento '.$order->number())
 
 @section('totals-aside')
+    @if ($order->warrantyOf)
+        <div class="label">Retorno em garantia</div>
+        <p class="strong">Referente à OS {{ $order->warrantyOf->number() }}. Os serviços marcados como "Garantia" não são cobrados.</p>
+    @endif
     <div class="label">Como aprovar</div>
     <p class="strong">
         Responda pelo WhatsApp ou fale com a gente{{ $shop['phone'] ? ' pelo '.BrFormat::phone($shop['phone']) : '' }}
@@ -72,7 +78,9 @@
                                     <small>{{ $item->notes }}</small>
                                 @endif
                             </td>
-                            @if ($item->price_cents === null)
+                            @if ($item->warranty_of_item_id)
+                                <td class="right money done">Garantia</td>
+                            @elseif ($item->price_cents === null)
                                 <td class="right money tbd">a definir</td>
                             @else
                                 <td class="right money">{{ Money::format($item->price_cents) }}</td>

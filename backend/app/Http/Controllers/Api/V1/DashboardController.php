@@ -7,10 +7,14 @@ use App\Enums\ReminderStatus;
 use App\Enums\ServiceOrderStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Appointment;
+use App\Models\Bill;
 use App\Models\Part;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderPayment;
 use App\Models\ServiceReminder;
+use App\Services\Finance\CashFlow;
+use App\Support\BackupStatus;
+use App\Support\Nps;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -91,6 +95,14 @@ class DashboardController extends Controller
                 ])->values(),
             ],
             'reminders_pending' => ServiceReminder::whereIn('status', ReminderStatus::openValues())->count(),
+            'satisfaction' => $this->satisfaction(),
+            // Só o master vê (é quem resolve): aviso quando o backup falhou ou parou
+            'backup' => $request->user()->isMaster() ? BackupStatus::get() : null,
+            'warranty_returns_month' => ServiceOrder::query()
+                ->whereNotNull('warranty_of_id')
+                ->where('status', '!=', ServiceOrderStatus::Canceled->value)
+                ->where('created_at', '>=', $now->copy()->startOfMonth()->utc())
+                ->count(),
             'low_stock' => [
                 'count' => Part::lowStock()->count(),
                 'items' => Part::lowStock()->orderBy('stock_quantity')->limit(5)->get()->map(fn (Part $part) => [
@@ -102,6 +114,36 @@ class DashboardController extends Controller
                 ]),
             ],
         ]]);
+    }
+
+    /**
+     * NPS dos últimos 90 dias, as avaliações mais recentes e quantas entregas esperam avaliação.
+     *
+     * @return array<string, mixed>
+     */
+    private function satisfaction(): array
+    {
+        $since = now()->subDays(90);
+        $answered = ServiceOrder::query()->whereNotNull('survey_answered_at')->where('survey_answered_at', '>=', $since);
+
+        return [
+            ...Nps::summarize((clone $answered)->pluck('survey_score')),
+            'days' => 90,
+            'recent' => (clone $answered)->with('customer')->latest('survey_answered_at')->limit(3)->get()->map(fn (ServiceOrder $order) => [
+                'id' => $order->id,
+                'number' => $order->number(),
+                'customer' => $order->customer->trade_name ?: $order->customer->name,
+                'score' => $order->survey_score,
+                'comment' => $order->survey_comment,
+                'answered_at' => $order->survey_answered_at->toIso8601String(),
+            ]),
+            // Entregues nos últimos 30 dias que ainda não avaliaram (para pedir a avaliação)
+            'awaiting' => ServiceOrder::query()
+                ->where('status', ServiceOrderStatus::Delivered->value)
+                ->whereNull('survey_answered_at')
+                ->where('delivered_at', '>=', now()->subDays(30))
+                ->count(),
+        ];
     }
 
     /**
@@ -174,6 +216,12 @@ class DashboardController extends Controller
                 ->sum('amount_cents'),
             'receivable_cents' => (int) (clone $receivable)->sum('total_cents') - (int) (clone $receivable)->sum('paid_cents'),
             'receivable_count' => (clone $receivable)->count(),
+            // Contas a pagar: vencidas e próximos 7 dias; saldo do caixa hoje
+            'bills_overdue_count' => Bill::query()->open()->whereDate('due_date', '<', $now->toDateString())->count(),
+            'bills_overdue_cents' => (int) Bill::query()->open()->whereDate('due_date', '<', $now->toDateString())->sum('amount_cents'),
+            'bills_due_soon_count' => Bill::query()->open()->whereDate('due_date', '>=', $now->toDateString())->whereDate('due_date', '<=', $now->copy()->addDays(7)->toDateString())->count(),
+            'bills_due_soon_cents' => (int) Bill::query()->open()->whereDate('due_date', '>=', $now->toDateString())->whereDate('due_date', '<=', $now->copy()->addDays(7)->toDateString())->sum('amount_cents'),
+            'cash_balance_cents' => app(CashFlow::class)->balanceBefore($now->copy()->addDay()->startOfDay()),
         ];
     }
 }

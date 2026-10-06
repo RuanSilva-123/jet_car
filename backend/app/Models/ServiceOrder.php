@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
+use App\Support\ShopSettings;
 use Database\Factories\ServiceOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -11,6 +12,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Support\Carbon;
 
 #[Fillable(['mileage', 'complaint', 'notes', 'expected_at', 'discount_cents'])]
 class ServiceOrder extends Model
@@ -36,6 +38,8 @@ class ServiceOrder extends Model
             'discount_cents' => 'integer',
             'total_cents' => 'integer',
             'paid_cents' => 'integer',
+            'survey_score' => 'integer',
+            'survey_answered_at' => 'datetime',
             'budget_sent_at' => 'datetime',
             'budget_approved_at' => 'datetime',
             'budget_approved_total_cents' => 'integer',
@@ -127,6 +131,34 @@ class ServiceOrder extends Model
     public function parts(): HasMany
     {
         return $this->hasMany(ServiceOrderPart::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * OS original, quando esta é um retorno em garantia.
+     *
+     * @return BelongsTo<ServiceOrder, $this>
+     */
+    public function warrantyOf(): BelongsTo
+    {
+        return $this->belongsTo(ServiceOrder::class, 'warranty_of_id');
+    }
+
+    /**
+     * Retornos em garantia desta OS.
+     *
+     * @return HasMany<ServiceOrder, $this>
+     */
+    public function warrantyReturns(): HasMany
+    {
+        return $this->hasMany(ServiceOrder::class, 'warranty_of_id')->orderBy('id');
+    }
+
+    /** Fim da garantia (entrega + prazo dos dados da oficina); null se não foi entregue. */
+    public function warrantyUntil(): ?Carbon
+    {
+        $days = (int) ShopSettings::get()['warranty_days'];
+
+        return $this->delivered_at && $days > 0 ? $this->delivered_at->copy()->addDays($days)->endOfDay() : null;
     }
 
     /**

@@ -12,6 +12,8 @@ use App\Models\User;
 use App\Models\Vehicle;
 use App\Services\Inventory\StockManager;
 use App\Support\Money;
+use App\Support\ShopSettings;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -184,6 +186,101 @@ class ServiceOrderManager
                 .($cancel ? 'OS cancelada.' : 'Orçamento em revisão.')
                 .($note ? "\n{$note}" : '');
             $this->record($order, $actor, 'budget_rejected', $description, $from, $order->status);
+
+            return $order;
+        });
+    }
+
+    /**
+     * OS entregues do mesmo veículo ainda dentro da garantia (prazo nos dados da oficina).
+     *
+     * @return Collection<int, ServiceOrder>
+     */
+    public function warrantyCandidates(ServiceOrder $order): Collection
+    {
+        $days = (int) ShopSettings::get()['warranty_days'];
+        if ($days <= 0) {
+            return new Collection;
+        }
+
+        return ServiceOrder::query()
+            ->where('vehicle_id', $order->vehicle_id)
+            ->whereKeyNot($order->id)
+            ->where('status', ServiceOrderStatus::Delivered->value)
+            ->where('delivered_at', '>=', now()->subDays($days)->startOfDay())
+            ->with(['items' => fn ($query) => $query->where('is_done', true)])
+            ->latest('delivered_at')
+            ->get();
+    }
+
+    /**
+     * Marca a OS como retorno em garantia da OS original. Os serviços refeitos entram sem custo,
+     * ligados ao serviço original (base do relatório de retornos).
+     *
+     * @param  list<int>  $itemIds  serviços da OS original que estão sendo refeitos
+     */
+    public function linkWarranty(ServiceOrder $order, ServiceOrder $original, array $itemIds, User $actor): ServiceOrder
+    {
+        $this->ensureEditable($order);
+
+        if ($order->warranty_of_id !== null) {
+            throw ValidationException::withMessages(['warranty_of_id' => 'Esta OS já é retorno em garantia da OS #'.$order->warrantyOf?->number().'. Desfaça o vínculo para trocar.']);
+        }
+        if (! $this->warrantyCandidates($order)->contains('id', $original->id)) {
+            throw ValidationException::withMessages(['warranty_of_id' => 'A OS escolhida não é deste veículo, não foi entregue ou já está fora da garantia.']);
+        }
+
+        $items = $original->items()->whereIn('id', $itemIds)->where('is_done', true)->get();
+        if ($items->count() !== count(array_unique($itemIds))) {
+            throw ValidationException::withMessages(['item_ids' => 'Escolha serviços feitos na OS original.']);
+        }
+
+        return DB::transaction(function () use ($order, $original, $items, $actor) {
+            $order->warranty_of_id = $original->id;
+            $order->save();
+
+            $position = (int) $order->items()->max('position');
+            foreach ($items as $item) {
+                $order->items()->create([
+                    'labor_service_id' => $item->labor_service_id,
+                    'warranty_of_item_id' => $item->id,
+                    'name' => $item->name,
+                    'notes' => 'Garantia da OS #'.$original->number(),
+                    // Retorno em garantia não é cobrado
+                    'price_cents' => 0,
+                    'position' => ++$position,
+                ]);
+            }
+            $this->recalculateTotals($order);
+
+            $names = $items->pluck('name')->implode(', ');
+            $this->record($order, $actor, 'warranty_linked', 'Retorno em garantia da OS #'.$original->number().($names ? ". Serviços refeitos sem custo: {$names}." : '.'));
+            $this->record($original, $actor, 'warranty_return', 'O veículo voltou em garantia: OS #'.$order->number().($names ? " ({$names})." : '.'));
+
+            return $order;
+        });
+    }
+
+    /** Desfaz o vínculo de garantia (os serviços de garantia ainda não feitos saem da OS). */
+    public function unlinkWarranty(ServiceOrder $order, User $actor): ServiceOrder
+    {
+        $this->ensureEditable($order);
+        $original = $order->warrantyOf;
+        if (! $original) {
+            throw ValidationException::withMessages(['warranty_of_id' => 'Esta OS não é retorno em garantia.']);
+        }
+        if ($order->items()->whereNotNull('warranty_of_item_id')->where('is_done', true)->exists()) {
+            throw ValidationException::withMessages(['warranty_of_id' => 'Há serviço de garantia já feito. Desmarque-o antes de desfazer o vínculo.']);
+        }
+
+        return DB::transaction(function () use ($order, $original, $actor) {
+            $order->items()->whereNotNull('warranty_of_item_id')->delete();
+            $order->warranty_of_id = null;
+            $order->save();
+            $this->recalculateTotals($order);
+
+            $this->record($order, $actor, 'warranty_unlinked', 'Deixou de ser retorno em garantia da OS #'.$original->number().'.');
+            $this->record($original, $actor, 'warranty_unlinked', 'OS #'.$order->number().' não é mais retorno em garantia desta OS.');
 
             return $order;
         });

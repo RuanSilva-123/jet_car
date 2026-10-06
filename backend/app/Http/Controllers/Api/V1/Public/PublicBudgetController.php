@@ -7,6 +7,7 @@ use App\Models\ServiceOrder;
 use App\Services\ServiceOrders\ServiceOrderManager;
 use App\Support\BudgetLink;
 use App\Support\Money;
+use App\Support\Pix\PixCharge;
 use App\Support\ShopSettings;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -128,7 +129,11 @@ class PublicBudgetController extends Controller
                 'total_cents' => $order->total_cents,
                 'total_label' => Money::format($order->total_cents),
                 'budget_approved_at' => $order->budget_approved_at?->toIso8601String(),
+                'paid_cents' => $order->paid_cents,
+                'balance_cents' => max(0, $order->balanceCents()),
             ],
+            // Aprovado e com saldo: o cliente já pode pagar pelo Pix (estático; a oficina confere e dá baixa)
+            'pix' => $state === 'approved' ? PixCharge::forOrder($order) : null,
         ]]);
     }
 }

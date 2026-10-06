@@ -94,6 +94,16 @@
         .photos img { width: 56mm; height: 42mm; border: 0.2mm solid #e4e4e7; }
         .photos small { display: block; color: #71717a; font-size: 7pt; }
 
+        /* Pix do saldo no comprovante */
+        .pix { margin-top: 6mm; border: 0.3mm solid #e4e4e7; page-break-inside: avoid; }
+        .pix td { padding: 3mm; vertical-align: middle; }
+        .pix__qr { width: 38mm; }
+        .pix__qr img { width: 34mm; height: 34mm; }
+        .pix__text p { margin-top: 1mm; color: #52525b; font-size: 7.8pt; }
+        .pix__amount { color: #18181b !important; font-size: 13pt !important; font-weight: bold; }
+        .pix__code { padding: 1.5mm; background: #f4f4f5; color: #27272a !important; font-family: 'DejaVu Sans Mono', monospace; font-size: 6.5pt !important; word-wrap: break-word; word-break: break-all; }
+        .pix__who { color: #a1a1aa !important; font-size: 7pt !important; }
+
         .totals-note { margin-top: 1.5mm; color: #a1a1aa; font-size: 7.5pt; text-align: right; }
 
     </style>

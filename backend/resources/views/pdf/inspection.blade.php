@@ -2,6 +2,7 @@
 
 @php
     use App\Models\ServiceOrderInspection;
+    use App\Support\LocalTime;
 
     $inspection = $order->inspection;
     $checked = collect($inspection?->checklist ?? []);
@@ -19,7 +20,7 @@
             </td>
             <td style="width: 58mm; vertical-align: bottom;">
                 <table class="doc-meta">
-                    <tr><td class="label">Entrada</td><td class="value">{{ $order->created_at->format('d/m/Y H:i') }}</td></tr>
+                    <tr><td class="label">Entrada</td><td class="value">{{ LocalTime::format($order->created_at) }}</td></tr>
                 </table>
             </td>
         </tr>

@@ -25,6 +25,15 @@ return [
     | ou km antes da quilometragem prevista).
     */
 
+    /*
+    | Backup: o container "backup" grava a situação do último backup neste arquivo
+    | (pasta ./backups montada só para leitura). Mostrado em Dados da oficina e no dashboard.
+    */
+
+    'backup' => [
+        'status_path' => env('BACKUP_STATUS_PATH', '/backups/last-backup.json'),
+    ],
+
     'reminders' => [
         'lead_days' => (int) env('REMINDER_LEAD_DAYS', 15),
         'lead_km' => (int) env('REMINDER_LEAD_KM', 500),
