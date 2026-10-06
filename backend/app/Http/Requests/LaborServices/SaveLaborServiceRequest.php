@@ -27,6 +27,8 @@ class SaveLaborServiceRequest extends FormRequest
             // Espaços repetidos viram um só: "Troca  de óleo " → "Troca de óleo"
             'name' => preg_replace('/\s+/', ' ', trim((string) $this->input('name'))),
             'description' => $description === '' ? null : $description,
+            'reminder_months' => $this->filled('reminder_months') ? $this->input('reminder_months') : null,
+            'reminder_km' => $this->filled('reminder_km') ? preg_replace('/\D/', '', (string) $this->input('reminder_km')) : null,
         ]);
     }
 
@@ -49,6 +51,9 @@ class SaveLaborServiceRequest extends FormRequest
             'category' => ['required', Rule::enum(ServiceCategory::class)],
             'description' => ['nullable', 'string', 'max:1000'],
             'is_active' => ['required', 'boolean'],
+            // Revisão: "a cada 10 mil km ou 6 meses" (o que vier primeiro); vazio = sem lembrete
+            'reminder_months' => ['nullable', 'integer', 'between:1,120'],
+            'reminder_km' => ['nullable', 'integer', 'between:100,500000'],
         ];
     }
 
@@ -63,6 +68,8 @@ class SaveLaborServiceRequest extends FormRequest
             'category.required' => 'Selecione a categoria.',
             'category.enum' => 'Categoria inválida.',
             'description.max' => 'A descrição pode ter no máximo 1000 caracteres.',
+            'reminder_months.*' => 'Intervalo em meses: de 1 a 120.',
+            'reminder_km.*' => 'Intervalo em km: de 100 a 500.000.',
         ];
     }
 }

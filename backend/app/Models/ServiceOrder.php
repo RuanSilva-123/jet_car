@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 #[Fillable(['mileage', 'complaint', 'notes', 'expected_at', 'discount_cents'])]
 class ServiceOrder extends Model
@@ -126,6 +127,22 @@ class ServiceOrder extends Model
     public function parts(): HasMany
     {
         return $this->hasMany(ServiceOrderPart::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * @return HasOne<ServiceOrderInspection, $this>
+     */
+    public function inspection(): HasOne
+    {
+        return $this->hasOne(ServiceOrderInspection::class);
+    }
+
+    /**
+     * @return HasMany<ServiceOrderPhoto, $this>
+     */
+    public function photos(): HasMany
+    {
+        return $this->hasMany(ServiceOrderPhoto::class)->orderBy('id');
     }
 
     /**

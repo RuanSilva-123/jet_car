@@ -2,9 +2,9 @@
 
 namespace App\Providers;
 
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
-use App\Models\User;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
@@ -27,6 +27,9 @@ class AppServiceProvider extends ServiceProvider
     {
         // Limite por IP na rota de login (o limite por e-mail fica no LoginRequest)
         RateLimiter::for('login', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
+
+        // Páginas públicas (orçamento por link): protege contra varredura de tokens
+        RateLimiter::for('public', fn (Request $request) => Limit::perMinute(30)->by($request->ip()));
 
         // Consultas FIPE/CEP: protege a cota diária das APIs externas
         RateLimiter::for('lookups', fn (Request $request) => Limit::perMinute(60)->by($request->user()?->id ?: $request->ip()));

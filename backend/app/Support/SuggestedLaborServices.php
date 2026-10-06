@@ -11,7 +11,24 @@ use App\Enums\ServiceCategory;
 final class SuggestedLaborServices
 {
     /**
-     * @return list<array{name: string, category: ServiceCategory}>
+     * Intervalo de revisão sugerido (meses, km) dos serviços que se repetem.
+     * Base para os lembretes de revisão; a oficina ajusta no cadastro do serviço.
+     */
+    private const INTERVALS = [
+        'Revisão preventiva' => [12, 10000],
+        'Troca de óleo e filtro de óleo' => [6, 10000],
+        'Troca de filtro de ar' => [12, 15000],
+        'Troca de filtro de combustível' => [12, 20000],
+        'Troca de filtro de cabine' => [12, 15000],
+        'Troca de correia dentada' => [48, 60000],
+        'Troca de velas de ignição' => [24, 30000],
+        'Troca de fluido de freio' => [24, null],
+        'Alinhamento' => [12, 10000],
+        'Rodízio de pneus' => [6, 10000],
+    ];
+
+    /**
+     * @return list<array{name: string, category: ServiceCategory, reminder_months: ?int, reminder_km: ?int}>
      */
     public static function all(): array
     {
@@ -91,7 +108,8 @@ final class SuggestedLaborServices
         $list = [];
         foreach ($services as $category => $names) {
             foreach ($names as $name) {
-                $list[] = ['name' => $name, 'category' => ServiceCategory::from($category)];
+                [$months, $km] = self::INTERVALS[$name] ?? [null, null];
+                $list[] = ['name' => $name, 'category' => ServiceCategory::from($category), 'reminder_months' => $months, 'reminder_km' => $km];
             }
         }
 

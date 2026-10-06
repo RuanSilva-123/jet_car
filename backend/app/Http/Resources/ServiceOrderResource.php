@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Models\ServiceOrder;
+use App\Support\BudgetLink;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -12,7 +13,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 class ServiceOrderResource extends JsonResource
 {
     /** Relações carregadas no detalhe da OS. */
-    public const DETAIL_RELATIONS = ['customer', 'vehicle', 'creator', 'items.doneBy', 'items.mechanic', 'parts', 'payments.receiver', 'events.user'];
+    public const DETAIL_RELATIONS = ['customer', 'vehicle', 'creator', 'items.doneBy', 'items.mechanic', 'parts', 'payments.receiver', 'inspection', 'events.user'];
 
     /**
      * @return array<string, mixed>
@@ -52,6 +53,13 @@ class ServiceOrderResource extends JsonResource
             'budget_changed_after_approval' => $this->budgetChangedAfterApproval(),
             // Detalhe: quantos serviços/peças ainda estão sem valor (orçamento incompleto)
             'unpriced_count' => $this->when($this->relationLoaded('items'), fn () => $this->unpricedCount()),
+            // Detalhe: link público do orçamento (cliente aprova/recusa sem login), quando há o que aprovar
+            'public_budget_url' => $this->when(
+                $this->relationLoaded('items'),
+                fn () => ! $this->status->isFinal() && $this->unpricedCount() === 0 && ($this->items->isNotEmpty() || $this->parts()->exists())
+                    ? BudgetLink::make($this->resource)['url']
+                    : null,
+            ),
 
             'customer' => $this->whenLoaded('customer', fn () => [
                 'id' => $this->customer->id,
@@ -96,6 +104,11 @@ class ServiceOrderResource extends JsonResource
                 'unit_price_cents' => $part->unit_price_cents,
                 'total_cents' => $part->totalCents(),
             ])),
+            // Detalhe: situação da vistoria de entrada (o conteúdo vem de /inspection)
+            'inspection' => $this->whenLoaded('inspection', fn () => [
+                'exists' => $this->inspection !== null,
+                'signed_at' => $this->inspection?->signed_at?->toIso8601String(),
+            ]),
             'payments' => $this->whenLoaded('payments', fn () => $this->payments->map(fn ($payment) => [
                 'id' => $payment->id,
                 'method' => $payment->method->value,

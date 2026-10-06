@@ -1,0 +1,179 @@
+<?php
+
+namespace App\Http\Controllers\Api\V1;
+
+use App\Enums\AppointmentStatus;
+use App\Enums\ReminderStatus;
+use App\Enums\ServiceOrderStatus;
+use App\Http\Controllers\Controller;
+use App\Models\Appointment;
+use App\Models\Part;
+use App\Models\ServiceOrder;
+use App\Models\ServiceOrderPayment;
+use App\Models\ServiceReminder;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
+
+/**
+ * Indicadores da oficina: OS por status, atrasadas, orçamentos sem resposta, prontas para
+ * retirada, faturamento do mês (só para quem acessa o financeiro), agenda do dia, lembretes
+ * e estoque baixo. Datas "de hoje" e "do mês" no fuso da oficina.
+ */
+class DashboardController extends Controller
+{
+    private const LIST_LIMIT = 6;
+
+    public function __invoke(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            // Orçamento enviado há mais de X dias sem resposta
+            'budget_days' => ['nullable', 'integer', 'between:1,60'],
+        ]);
+        $budgetDays = (int) ($data['budget_days'] ?? 3);
+
+        $tz = (string) config('jetcar.timezone');
+        $now = now()->timezone($tz);
+        $today = $now->toDateString();
+
+        $counts = ServiceOrder::query()
+            ->whereIn('status', ServiceOrderStatus::activeValues())
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $statusCounts = collect(ServiceOrderStatus::cases())
+            ->filter(fn (ServiceOrderStatus $status) => ! $status->isFinal())
+            ->map(fn (ServiceOrderStatus $status) => [
+                'status' => $status->value,
+                'label' => $status->label(),
+                'count' => (int) ($counts[$status->value] ?? 0),
+            ])->values();
+
+        // Atrasadas: previsão vencida e ainda não pronta
+        $overdue = ServiceOrder::query()
+            ->whereIn('status', [ServiceOrderStatus::Open->value, ServiceOrderStatus::WaitingApproval->value, ServiceOrderStatus::InProgress->value, ServiceOrderStatus::WaitingParts->value])
+            ->whereNotNull('expected_at')
+            ->whereDate('expected_at', '<', $today);
+
+        $staleBudgets = ServiceOrder::query()
+            ->where('status', ServiceOrderStatus::WaitingApproval->value)
+            ->where('budget_sent_at', '<=', $now->copy()->subDays($budgetDays)->utc());
+
+        $ready = ServiceOrder::query()->where('status', ServiceOrderStatus::Completed->value);
+
+        $appointments = Appointment::query()
+            ->with(['customer', 'vehicle'])
+            ->whereIn('status', [AppointmentStatus::Scheduled->value, AppointmentStatus::Confirmed->value])
+            ->whereBetween('scheduled_at', [$now->copy()->startOfDay()->utc(), $now->copy()->endOfDay()->utc()])
+            ->orderBy('scheduled_at')
+            ->get();
+
+        return response()->json(['data' => [
+            'generated_at' => now()->toIso8601String(),
+            'budget_days' => $budgetDays,
+            'status_counts' => $statusCounts,
+            'active_total' => (int) $statusCounts->sum('count'),
+            'overdue' => $this->orderList($overdue, 'expected_at'),
+            'stale_budgets' => $this->orderList($staleBudgets, 'budget_sent_at'),
+            'ready_for_pickup' => $this->orderList($ready, 'completed_at'),
+            'finance' => $request->user()->canManageFinance() ? $this->finance($now) : null,
+            'appointments_today' => [
+                'count' => $appointments->count(),
+                'items' => $appointments->take(self::LIST_LIMIT)->map(fn (Appointment $appointment) => [
+                    'id' => $appointment->id,
+                    'scheduled_at' => $appointment->scheduled_at->toIso8601String(),
+                    'status' => $appointment->status->value,
+                    'customer' => $appointment->customer->trade_name ?: $appointment->customer->name,
+                    'vehicle' => $appointment->vehicle ? trim($appointment->vehicle->brand.' '.$appointment->vehicle->model) : null,
+                    'plate' => $appointment->vehicle?->plate,
+                ])->values(),
+            ],
+            'reminders_pending' => ServiceReminder::whereIn('status', ReminderStatus::openValues())->count(),
+            'low_stock' => [
+                'count' => Part::lowStock()->count(),
+                'items' => Part::lowStock()->orderBy('stock_quantity')->limit(5)->get()->map(fn (Part $part) => [
+                    'id' => $part->id,
+                    'name' => $part->name,
+                    'unit' => $part->unit,
+                    'stock_quantity' => (float) $part->stock_quantity,
+                    'min_stock' => (float) $part->min_stock,
+                ]),
+            ],
+        ]]);
+    }
+
+    /**
+     * @param  Builder<ServiceOrder>  $query
+     * @return array{count: int, items: mixed}
+     */
+    private function orderList(Builder $query, string $dateColumn): array
+    {
+        return [
+            'count' => (clone $query)->count(),
+            'items' => (clone $query)
+                ->with(['customer', 'vehicle'])
+                ->orderBy($dateColumn)
+                ->limit(self::LIST_LIMIT)
+                ->get()
+                ->map(fn (ServiceOrder $order) => [
+                    'id' => $order->id,
+                    'number' => $order->number(),
+                    'status' => $order->status->value,
+                    'customer' => $order->customer->trade_name ?: $order->customer->name,
+                    'phone' => $order->customer->phone,
+                    'phone_is_whatsapp' => $order->customer->phone_is_whatsapp,
+                    'vehicle' => trim($order->vehicle->brand.' '.$order->vehicle->model),
+                    'plate' => $order->vehicle->plate,
+                    'total_cents' => $order->total_cents,
+                    'date' => match (true) {
+                        $order->{$dateColumn} === null => null,
+                        $dateColumn === 'expected_at' => $order->expected_at->toDateString(),
+                        default => $order->{$dateColumn}->toIso8601String(),
+                    },
+                ]),
+        ];
+    }
+
+    /**
+     * Faturamento = OS entregues no mês (ticket médio sobre elas); recebido = pagamentos do mês.
+     *
+     * @return array<string, mixed>
+     */
+    private function finance(Carbon $now): array
+    {
+        $delivered = fn ($start, $end) => ServiceOrder::query()
+            ->where('status', ServiceOrderStatus::Delivered->value)
+            ->whereBetween('delivered_at', [$start->copy()->utc(), $end->copy()->utc()]);
+
+        $monthStart = $now->copy()->startOfMonth();
+        $current = $delivered($monthStart, $now->copy()->endOfDay());
+        $count = (clone $current)->count();
+        $revenue = (int) (clone $current)->sum('total_cents');
+
+        // Mês anterior até o mesmo dia, para a comparação ser justa
+        $previousStart = $monthStart->copy()->subMonthNoOverflow();
+        $previousEnd = $previousStart->copy()->addDays($now->day - 1)->endOfDay()->min($previousStart->copy()->endOfMonth());
+        $previousRevenue = (int) $delivered($previousStart, $previousEnd)->sum('total_cents');
+
+        $receivable = ServiceOrder::query()
+            ->whereNotNull('budget_approved_at')
+            ->where('status', '!=', ServiceOrderStatus::Canceled->value)
+            ->whereColumn('total_cents', '>', 'paid_cents');
+
+        return [
+            'month' => $monthStart->format('Y-m'),
+            'revenue_cents' => $revenue,
+            'delivered_count' => $count,
+            'average_ticket_cents' => $count ? intdiv($revenue, $count) : 0,
+            'previous_revenue_cents' => $previousRevenue,
+            'received_cents' => (int) ServiceOrderPayment::query()
+                ->whereDate('paid_at', '>=', $monthStart->toDateString())
+                ->whereDate('paid_at', '<=', $now->toDateString())
+                ->sum('amount_cents'),
+            'receivable_cents' => (int) (clone $receivable)->sum('total_cents') - (int) (clone $receivable)->sum('paid_cents'),
+            'receivable_count' => (clone $receivable)->count(),
+        ];
+    }
+}

@@ -133,8 +133,11 @@ class ServiceOrderManager
         });
     }
 
-    /** Cliente aprovou: registra o valor aprovado e inicia o serviço (se ainda não iniciado). */
-    public function approveBudget(ServiceOrder $order, ?string $note, User $actor): ServiceOrder
+    /**
+     * Cliente aprovou: registra o valor aprovado e inicia o serviço (se ainda não iniciado).
+     * Sem $actor = o próprio cliente respondeu pelo link público do orçamento.
+     */
+    public function approveBudget(ServiceOrder $order, ?string $note, ?User $actor): ServiceOrder
     {
         $this->ensureEditable($order);
         $this->ensureHasBudget($order);
@@ -150,7 +153,7 @@ class ServiceOrderManager
             }
             $order->save();
 
-            $description = 'Orçamento aprovado pelo cliente: '.Money::format($order->total_cents).'.'
+            $description = ($actor ? 'Orçamento aprovado pelo cliente: ' : 'Orçamento aprovado pelo cliente pelo link: ').Money::format($order->total_cents).'.'
                 .($order->status !== $from ? ' Serviço iniciado.' : '')
                 .($note ? "\n{$note}" : '');
             $this->record($order, $actor, 'budget_approved', $description, $from, $order->status);
@@ -159,8 +162,8 @@ class ServiceOrderManager
         });
     }
 
-    /** Cliente recusou: volta para revisão do orçamento ou cancela a OS. */
-    public function rejectBudget(ServiceOrder $order, ?string $note, bool $cancel, User $actor): ServiceOrder
+    /** Cliente recusou: volta para revisão do orçamento ou cancela a OS. Sem $actor = pelo link público. */
+    public function rejectBudget(ServiceOrder $order, ?string $note, bool $cancel, ?User $actor): ServiceOrder
     {
         $this->ensureEditable($order);
 
@@ -177,13 +180,24 @@ class ServiceOrderManager
             $order->save();
             $this->syncStockWithStatus($order, $from, $order->status, $actor);
 
-            $description = 'Orçamento recusado pelo cliente ('.Money::format($order->total_cents).'). '
+            $description = ($actor ? 'Orçamento recusado pelo cliente (' : 'Orçamento recusado pelo cliente pelo link (').Money::format($order->total_cents).'). '
                 .($cancel ? 'OS cancelada.' : 'Orçamento em revisão.')
                 .($note ? "\n{$note}" : '');
             $this->record($order, $actor, 'budget_rejected', $description, $from, $order->status);
 
             return $order;
         });
+    }
+
+    /** O orçamento pode receber a resposta do cliente (aprovar/recusar)? */
+    public function awaitsDecision(ServiceOrder $order): bool
+    {
+        if ($order->status->isFinal() || $order->unpricedCount() > 0 || (! $order->items()->exists() && ! $order->parts()->exists())) {
+            return false;
+        }
+
+        return in_array($order->status, [ServiceOrderStatus::Open, ServiceOrderStatus::WaitingApproval], true)
+            || $order->budgetChangedAfterApproval();
     }
 
     public function changeStatus(ServiceOrder $order, ServiceOrderStatus $status, ?string $note, User $actor): ServiceOrder
@@ -557,14 +571,14 @@ class ServiceOrderManager
 
     private function record(
         ServiceOrder $order,
-        User $actor,
+        ?User $actor,
         string $type,
         string $description,
         ?ServiceOrderStatus $from = null,
         ?ServiceOrderStatus $to = null,
     ): void {
         $order->events()->create([
-            'user_id' => $actor->id,
+            'user_id' => $actor?->id,
             'type' => $type,
             'from_status' => $from,
             'to_status' => $to,

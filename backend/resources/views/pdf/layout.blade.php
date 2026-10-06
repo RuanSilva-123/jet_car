@@ -84,6 +84,22 @@
         .totals tr.grand td.value { font-size: 13pt; }
         .totals tr.balance td { color: #b91c1c; font-weight: bold; }
         .totals tr.paid td { color: #15803d; font-weight: bold; }
+        /* Vistoria */
+        .gauge { margin-top: 1mm; color: #18181b; font-size: 12pt; font-weight: bold; }
+        .checklist span { display: inline-block; width: 40mm; margin-top: 1mm; font-size: 8pt; }
+        .checklist .yes { color: #15803d; }
+        .checklist .no { color: #a1a1aa; }
+        .muted-text { color: #a1a1aa; font-size: 8.4pt; }
+        .photos td { width: 33.3%; padding: 0 2mm 3mm 0; }
+        .photos img { width: 56mm; height: 42mm; border: 0.2mm solid #e4e4e7; }
+        .photos small { display: block; color: #71717a; font-size: 7pt; }
+        .signature { margin-top: 10mm; page-break-inside: avoid; }
+        .signature__text { padding-right: 10mm; color: #52525b; font-size: 8pt; vertical-align: bottom; }
+        .signature__box { width: 72mm; text-align: center; vertical-align: bottom; }
+        .signature__box img { height: 20mm; }
+        .signature__line { padding-top: 1.5mm; border-top: 0.25mm solid #18181b; color: #18181b; font-size: 8.4pt; }
+        .signature__box small { color: #a1a1aa; font-size: 7pt; }
+
         .totals-note { margin-top: 1.5mm; color: #a1a1aa; font-size: 7.5pt; text-align: right; }
 
     </style>

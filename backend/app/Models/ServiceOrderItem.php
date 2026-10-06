@@ -32,6 +32,14 @@ class ServiceOrderItem extends Model
     }
 
     /**
+     * @return BelongsTo<LaborService, $this>
+     */
+    public function laborService(): BelongsTo
+    {
+        return $this->belongsTo(LaborService::class);
+    }
+
+    /**
      * @return BelongsTo<User, $this>
      */
     public function doneBy(): BelongsTo

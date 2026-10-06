@@ -5,9 +5,12 @@
 # ---------------------------------------------------------------------------
 FROM php:8.4-fpm-alpine AS base
 
-RUN apk add --no-cache icu-libs libpq libzip fcgi \
+# gd: reduz as fotos da vistoria no upload e permite ao dompdf embutir PNG (assinatura)
+RUN apk add --no-cache icu-libs libpq libzip fcgi libpng libjpeg-turbo libwebp freetype \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libpq-dev libzip-dev linux-headers \
-    && docker-php-ext-install -j"$(nproc)" bcmath intl opcache pcntl pdo_pgsql zip \
+        libpng-dev libjpeg-turbo-dev libwebp-dev freetype-dev \
+    && docker-php-ext-configure gd --with-jpeg --with-webp --with-freetype \
+    && docker-php-ext-install -j"$(nproc)" bcmath gd intl opcache pcntl pdo_pgsql zip \
     && pecl install redis \
     && docker-php-ext-enable redis \
     && apk del .build-deps \
