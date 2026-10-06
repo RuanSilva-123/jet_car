@@ -16,7 +16,7 @@
       </button>
     </header>
 
-    <div class="dialog__body dialog__body--scroll">
+    <div class="dialog__body">
       <form class="move" (submit)="$event.preventDefault(); submit()" novalidate>
         <div class="segmented" role="group" aria-label="Tipo de movimentação">
           <button type="button" [class.is-active]="mode() === 'entry'" (click)="mode.set('entry')">Entrada (compra)</button>

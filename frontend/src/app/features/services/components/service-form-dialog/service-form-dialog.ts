@@ -37,7 +37,7 @@ const MESSAGES: Record<string, string> = {
   selector: 'app-service-form-dialog',
   imports: [ReactiveFormsModule, Icon, MaskDirective],
   templateUrl: './service-form-dialog.html',
-  styleUrl: './service-form-dialog.scss',
+  styleUrls: ['../../../../shared/styles/form-dialog.scss', './service-form-dialog.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class ServiceFormDialog {

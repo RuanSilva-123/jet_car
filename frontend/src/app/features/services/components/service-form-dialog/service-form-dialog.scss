@@ -1,92 +1,4 @@
-dialog {
-  width: min(520px, calc(100vw - 32px));
-  padding: 0;
-  border: 0;
-  border-radius: var(--radius-lg);
-  background: var(--color-surface);
-  color: var(--color-text);
-  box-shadow: 0 24px 64px rgb(0 0 0 / 0.25);
-
-  &::backdrop {
-    background: rgb(0 0 0 / 0.55);
-    backdrop-filter: blur(2px);
-  }
-
-  &[open] {
-    animation: pop 0.15s ease-out;
-  }
-}
-
-.dialog__header {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: 20px 20px 0 24px;
-
-  > div {
-    flex: 1;
-  }
-
-  h2 {
-    font-size: 18px;
-  }
-
-  p {
-    color: var(--color-text-muted);
-    font-size: 13px;
-  }
-}
-
-.dialog__icon {
-  display: grid;
-  flex: none;
-  place-items: center;
-  width: 42px;
-  height: 42px;
-  border-radius: 12px;
-  background: var(--color-ink);
-  color: #fff;
-}
-
-.dialog__body {
-  display: grid;
-  gap: 18px;
-  padding: 22px 24px 24px;
-}
-
-.dialog__alert {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: var(--radius-md);
-  background: var(--color-danger-soft);
-  color: var(--color-danger);
-  font-weight: 500;
-}
-
-.dialog__footer {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 16px 24px;
-  border-top: 1px solid var(--color-border);
-  background: var(--color-hover);
-  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-
-.optional {
-  color: var(--color-text-muted);
-  font-weight: 400;
-}
-
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: scale(0.97);
-  }
-}
+// Base em shared/styles/form-dialog.scss; aqui só o bloco do lembrete de revisão
 
 .reminder {
   display: grid;
@@ -109,7 +21,7 @@ dialog {
 
   &__fields {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 12px;
   }
 }

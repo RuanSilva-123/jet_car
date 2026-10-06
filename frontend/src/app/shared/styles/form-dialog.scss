@@ -1,13 +1,18 @@
 // Diálogo com formulário (mesmo visual de service-form-dialog). Use em styleUrls: [este, o do componente].
+//
+// Rolagem: só o corpo rola. Cabeçalho e rodapé (botões) ficam sempre visíveis e o diálogo
+// nunca passa da altura da tela — evita barra de rolagem dupla (diálogo + corpo).
 
 dialog {
-  width: min(520px, calc(100vw - 32px));
+  width: min(560px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
   padding: 0;
   border: 0;
   border-radius: var(--radius-lg);
   background: var(--color-surface);
   color: var(--color-text);
   box-shadow: 0 24px 64px rgb(0 0 0 / 0.25);
+  overflow: hidden;
 
   &::backdrop {
     background: rgb(0 0 0 / 0.55);
@@ -15,18 +20,35 @@ dialog {
   }
 
   &[open] {
+    display: flex;
+    flex-direction: column;
     animation: pop 0.15s ease-out;
   }
+
+  // O <form> envolve cabeçalho, corpo e rodapé: também precisa ser coluna flexível
+  > form {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+}
+
+// Diálogo largo (tabelas, histórico)
+dialog.is-wide {
+  width: min(760px, calc(100vw - 32px));
 }
 
 .dialog__header {
   display: flex;
+  flex: none;
   align-items: flex-start;
   gap: 14px;
   padding: 20px 20px 0 24px;
 
   > div {
     flex: 1;
+    min-width: 0;
   }
 
   h2 {
@@ -52,8 +74,18 @@ dialog {
 
 .dialog__body {
   display: grid;
-  gap: 18px;
-  padding: 22px 24px 24px;
+  flex: 1 1 auto;
+  gap: 16px;
+  min-height: 0;
+  padding: 20px 24px 22px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+// Mantido por compatibilidade: a rolagem do corpo agora é o padrão
+.dialog__body--scroll {
+  overflow-y: auto;
 }
 
 .dialog__alert {
@@ -69,6 +101,7 @@ dialog {
 
 .dialog__footer {
   display: flex;
+  flex: none;
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 10px;
@@ -76,32 +109,6 @@ dialog {
   border-top: 1px solid var(--color-border);
   background: var(--color-hover);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
-}
-
-.optional {
-  color: var(--color-text-muted);
-  font-weight: 400;
-}
-
-@keyframes pop {
-  from {
-    opacity: 0;
-    transform: scale(0.97);
-  }
-}
-
-// Diálogo largo (tabelas, histórico)
-dialog.is-wide {
-  width: min(760px, calc(100vw - 32px));
-}
-
-dialog {
-  max-height: calc(100vh - 32px);
-}
-
-.dialog__body--scroll {
-  max-height: min(60vh, 560px);
-  overflow-y: auto;
 }
 
 .dialog__summary {
@@ -119,12 +126,49 @@ dialog {
   }
 }
 
+// Colunas de campos. minmax(0, 1fr): a coluna nunca cresce além do espaço (sem rolagem horizontal)
 .dialog__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+
+  &--3 {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  @media (max-width: 520px) {
+    &,
+    &--3 {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+// Campos um pouco mais baixos que os das páginas: cabe mais sem rolar
+.field__control {
+  height: 44px;
+}
+
+.field__control--textarea {
+  height: auto;
+
+  textarea {
+    min-height: 64px;
+  }
+}
+
+.optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
 }
 
 .muted {
   color: var(--color-text-muted);
+}
+
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
 }
