@@ -96,6 +96,65 @@ class AppointmentTest extends TestCase
         $this->postJson("/api/v1/appointments/{$id}/check-in", ['vehicle_id' => $this->vehicle->id])->assertCreated();
     }
 
+    public function test_books_someone_without_registration(): void
+    {
+        $this->postJson('/api/v1/appointments', ['scheduled_at' => '2026-10-08T09:00:00-03:00', 'duration_minutes' => 60])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['customer_id']);
+
+        $id = $this->book([
+            'customer_id' => null,
+            'vehicle_id' => null,
+            'contact_name' => '  Carlos Mendes ',
+            'contact_phone' => '(11) 98888-7777',
+            'vehicle_description' => 'Gol prata',
+        ]);
+
+        $this->getJson('/api/v1/appointments?from=2026-10-05T00:00:00-03:00&to=2026-10-12T00:00:00-03:00')
+            ->assertJsonPath('data.0.id', $id)
+            ->assertJsonPath('data.0.customer', null)
+            ->assertJsonPath('data.0.display_name', 'Carlos Mendes')
+            ->assertJsonPath('data.0.contact.phone', '11988887777')
+            ->assertJsonPath('data.0.vehicle_description', 'Gol prata');
+    }
+
+    public function test_check_in_registers_the_guest_as_customer(): void
+    {
+        $id = $this->book(['customer_id' => null, 'vehicle_id' => null, 'contact_name' => 'Carlos Mendes', 'contact_phone' => '11988887777']);
+
+        // Sem cadastro: precisa escolher ou cadastrar o cliente e o carro
+        $this->postJson("/api/v1/appointments/{$id}/check-in", [])->assertUnprocessable()->assertJsonValidationErrors(['customer']);
+
+        $orderId = $this->postJson("/api/v1/appointments/{$id}/check-in", [
+            'customer' => ['name' => 'Carlos Mendes', 'phone' => '(11) 98888-7777', 'phone_is_whatsapp' => true],
+            'vehicle' => ['type' => 'car', 'brand' => 'Volkswagen', 'model' => 'Gol 1.0', 'plate' => 'abc-1d23'],
+            'mileage' => 80000,
+        ])->assertCreated()->assertJsonPath('data.appointment.status', 'arrived')->json('data.service_order_id');
+
+        $customer = Customer::where('name', 'Carlos Mendes')->firstOrFail();
+        $this->assertSame('11988887777', $customer->phone);
+        $order = ServiceOrder::findOrFail($orderId);
+        $this->assertSame($customer->id, $order->customer_id);
+        $this->assertSame('ABC1D23', $order->vehicle->plate);
+        $this->assertSame('Revisão dos 50 mil km', $order->complaint);
+    }
+
+    public function test_check_in_links_guest_to_existing_customer(): void
+    {
+        $id = $this->book(['customer_id' => null, 'vehicle_id' => null, 'contact_name' => 'Ruan']);
+
+        // Placa já cadastrada em outro cliente
+        $this->postJson("/api/v1/appointments/{$id}/check-in", [
+            'customer' => ['name' => 'Ruan', 'phone' => '11977776666'],
+            'vehicle' => ['type' => 'car', 'brand' => 'X', 'model' => 'Y', 'plate' => $this->vehicle->plate],
+        ])->assertUnprocessable()->assertJsonValidationErrors(['vehicle.plate']);
+
+        $this->postJson("/api/v1/appointments/{$id}/check-in", ['customer_id' => $this->customer->id, 'vehicle_id' => $this->vehicle->id])
+            ->assertCreated()
+            ->assertJsonPath('data.appointment.customer.id', $this->customer->id);
+        $this->assertSame(1, Customer::count());
+    }
+
     public function test_status_changes(): void
     {
         $id = $this->book();

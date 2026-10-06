@@ -12,33 +12,67 @@
     </header>
 
     <div class="dialog__body">
-      <div class="field">
-        <label for="appointment-customer">Cliente</label>
-        <app-combobox
-          inputId="appointment-customer"
-          [remote]="true"
-          [options]="customerOptions()"
-          [value]="customer() ? '' + customer()!.id : null"
-          [fallbackLabel]="customer()?.trade_name || customer()?.name || null"
-          [loading]="searching()"
-          placeholder="Buscar por nome, telefone ou placa"
-          emptyText="Nenhum cliente encontrado"
-          (queryChange)="onQuery($event)"
-          (selected)="selectCustomer($event)"
-        />
+      <div class="who">
+        <div class="segmented" role="group" aria-label="Quem vem">
+          <button type="button" [class.is-active]="mode() === 'customer'" (click)="setMode('customer')">Cliente cadastrado</button>
+          <button type="button" [class.is-active]="mode() === 'guest'" (click)="setMode('guest')">Sem cadastro</button>
+        </div>
       </div>
 
-      @if (customer()) {
+      @if (mode() === 'customer') {
         <div class="field">
-          <label for="appointment-vehicle">Veículo</label>
-          <div class="field__control">
-            <select id="appointment-vehicle" [value]="vehicleId() ?? ''" (change)="vehicleId.set($any($event.target).value ? +$any($event.target).value : null)">
-              <option value="">Definir na chegada</option>
-              @for (vehicle of vehicles(); track vehicle.id) {
-                <option [value]="vehicle.id" [selected]="vehicle.id === vehicleId()">{{ vehicle.brand }} {{ vehicle.model }}{{ vehicle.plate ? ' · ' + vehicle.plate : '' }}</option>
-              }
-            </select>
+          <label for="appointment-customer">Cliente</label>
+          <app-combobox
+            inputId="appointment-customer"
+            [remote]="true"
+            [options]="customerOptions()"
+            [value]="customer() ? '' + customer()!.id : null"
+            [fallbackLabel]="customer()?.trade_name || customer()?.name || null"
+            [loading]="searching()"
+            placeholder="Buscar por nome, telefone ou placa"
+            emptyText="Nenhum cliente encontrado. Use “Sem cadastro”."
+            (queryChange)="onQuery($event)"
+            (selected)="selectCustomer($event)"
+          />
+        </div>
+
+        @if (customer()) {
+          <div class="field">
+            <label for="appointment-vehicle">Veículo</label>
+            <div class="field__control">
+              <select id="appointment-vehicle" [value]="vehicleId() ?? ''" (change)="vehicleId.set($any($event.target).value ? +$any($event.target).value : null)">
+                <option value="">Definir na chegada</option>
+                @for (vehicle of vehicles(); track vehicle.id) {
+                  <option [value]="vehicle.id" [selected]="vehicle.id === vehicleId()">{{ vehicle.brand }} {{ vehicle.model }}{{ vehicle.plate ? ' · ' + vehicle.plate : '' }}</option>
+                }
+              </select>
+            </div>
           </div>
+        }
+      } @else {
+        <div class="dialog__grid">
+          <div class="field">
+            <label for="appointment-guest-name">Nome</label>
+            <div class="field__control">
+              <app-icon name="user" />
+              <input id="appointment-guest-name" maxlength="120" placeholder="Quem vem" [value]="guestName()" (input)="guestName.set($any($event.target).value)" />
+            </div>
+          </div>
+          <div class="field">
+            <label for="appointment-guest-phone">Telefone <span class="optional">(opcional)</span></label>
+            <div class="field__control">
+              <app-icon name="phone" />
+              <input id="appointment-guest-phone" inputmode="tel" placeholder="(11) 98765-4321" [value]="guestPhone()" (input)="onGuestPhone($event)" />
+            </div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="appointment-guest-vehicle">Carro <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="car" />
+            <input id="appointment-guest-vehicle" maxlength="120" placeholder="Ex.: Gol prata, placa ABC1D23" [value]="vehicleDescription()" (input)="vehicleDescription.set($any($event.target).value)" />
+          </div>
+          <small class="muted">O cadastro do cliente e do carro é feito quando ele chegar, no “Carro chegou”.</small>
         </div>
       }
 

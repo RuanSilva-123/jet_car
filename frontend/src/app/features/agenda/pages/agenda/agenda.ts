@@ -137,15 +137,25 @@ export class AgendaPage implements OnInit {
     this.router.navigate(['/service-orders', orderId]);
   }
 
-  protected whatsappLink(appointment: Appointment): string {
+  /** WhatsApp do cliente (cadastro) ou do celular digitado (sem cadastro); null se não tiver. */
+  protected whatsappLink(appointment: Appointment): string | null {
+    const phone = appointment.customer
+      ? appointment.customer.phone_is_whatsapp
+        ? appointment.customer.phone
+        : null
+      : appointment.contact?.phone?.length === 11
+        ? appointment.contact.phone
+        : null;
+    if (!phone) return null;
+
     const when = new Date(appointment.scheduled_at);
     const text =
-      `Olá, ${appointment.customer.name.split(' ')[0]}! Confirmando seu horário na oficina: ` +
+      `Olá, ${appointment.display_name.split(' ')[0]}! Confirmando seu horário na oficina: ` +
       `${when.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' })} às ` +
       `${when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}` +
       (appointment.vehicle ? ` com o ${appointment.vehicle.brand} ${appointment.vehicle.model}` : '') +
       '. Podemos confirmar?';
-    return `https://wa.me/55${appointment.customer.phone}?text=${encodeURIComponent(text)}`;
+    return `https://wa.me/55${phone}?text=${encodeURIComponent(text)}`;
   }
 
   protected isOpen(appointment: Appointment): boolean {

@@ -1,0 +1,149 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="check-in-title">
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="car" [size]="20" /></span>
+      <div>
+        <h2 id="check-in-title">Carro chegou</h2>
+        <p>{{ appointment()?.display_name }} · abre a OS com o motivo do agendamento.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      @if (isGuest()) {
+        <p class="section-title">Cliente</p>
+        <div class="who">
+          <div class="segmented" role="group" aria-label="Cliente">
+            <button type="button" [class.is-active]="guestMode() === 'new'" (click)="setGuestMode('new')">Cadastrar agora</button>
+            <button type="button" [class.is-active]="guestMode() === 'existing'" (click)="setGuestMode('existing')">Já é cliente</button>
+          </div>
+        </div>
+
+        @if (guestMode() === 'new') {
+          <div class="dialog__grid">
+            <div class="field">
+              <label for="check-in-name">Nome</label>
+              <div class="field__control">
+                <input id="check-in-name" maxlength="150" [value]="name()" (input)="name.set($any($event.target).value)" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="check-in-phone">Telefone</label>
+              <div class="field__control">
+                <app-icon name="phone" />
+                <input id="check-in-phone" inputmode="tel" placeholder="(11) 98765-4321" [value]="phone()" (input)="onPhone($event)" />
+              </div>
+            </div>
+          </div>
+          <label class="checkbox">
+            <input type="checkbox" [checked]="whatsapp()" (change)="whatsapp.set($any($event.target).checked)" />
+            <span>O telefone é WhatsApp</span>
+          </label>
+          <small class="muted">O resto do cadastro (CPF, endereço...) pode ser completado depois em Clientes.</small>
+        } @else {
+          <div class="field">
+            <label for="check-in-customer">Cliente cadastrado</label>
+            <app-combobox
+              inputId="check-in-customer"
+              [remote]="true"
+              [options]="customerOptions()"
+              [value]="chosenCustomer() ? '' + chosenCustomer()!.id : null"
+              [fallbackLabel]="chosenCustomer()?.trade_name || chosenCustomer()?.name || null"
+              [loading]="searching()"
+              placeholder="Buscar por nome, telefone ou placa"
+              emptyText="Nenhum cliente encontrado"
+              (queryChange)="onQuery($event)"
+              (selected)="selectCustomer($event)"
+            />
+          </div>
+        }
+      }
+
+      @if (needsVehicle()) {
+        <p class="section-title">Veículo</p>
+        @if (!onlyNewVehicle() && (!isGuest() || chosenCustomer())) {
+          <div class="field">
+            <label for="check-in-vehicle" class="sr-only">Veículo</label>
+            <div class="field__control">
+              <select id="check-in-vehicle" (change)="onVehicleChoice($any($event.target).value)">
+                <option value="" [selected]="vehicleChoice() === null">Selecione</option>
+                @for (vehicle of vehicles(); track vehicle.id) {
+                  <option [value]="vehicle.id" [selected]="vehicle.id === vehicleChoice()">
+                    {{ vehicle.brand }} {{ vehicle.model }}{{ vehicle.plate ? ' · ' + vehicle.plate : '' }}
+                  </option>
+                }
+                <option value="new" [selected]="vehicleChoice() === 'new'">+ Cadastrar outro veículo</option>
+              </select>
+            </div>
+          </div>
+        }
+        @if (showVehicleForm()) {
+          @if (appointment()?.vehicle_description; as description) {
+            <small class="muted">Informado no agendamento: “{{ description }}”.</small>
+          }
+          <div class="dialog__grid">
+            <div class="field">
+              <label for="check-in-type">Tipo</label>
+              <div class="field__control">
+                <select id="check-in-type" (change)="vehicleType.set($any($event.target).value)">
+                  @for (type of vehicleTypes; track type.value) {
+                    <option [value]="type.value" [selected]="type.value === vehicleType()">{{ type.label }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+            <div class="field">
+              <label for="check-in-plate">Placa <span class="optional">(opcional)</span></label>
+              <div class="field__control">
+                <input id="check-in-plate" placeholder="ABC1D23" [value]="plate()" (input)="onPlate($event)" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="check-in-brand">Marca</label>
+              <div class="field__control">
+                <input id="check-in-brand" maxlength="80" placeholder="Ex.: Volkswagen" [value]="brand()" (input)="brand.set($any($event.target).value)" />
+              </div>
+            </div>
+            <div class="field">
+              <label for="check-in-model">Modelo</label>
+              <div class="field__control">
+                <input id="check-in-model" maxlength="150" placeholder="Ex.: Gol 1.0" [value]="model()" (input)="model.set($any($event.target).value)" />
+              </div>
+            </div>
+          </div>
+        }
+      } @else {
+        <div class="dialog__summary">
+          <span>{{ appointment()!.vehicle!.brand }} {{ appointment()!.vehicle!.model }}</span>
+          <strong>{{ appointment()!.vehicle!.plate ?? '' }}</strong>
+        </div>
+      }
+
+      <div class="field">
+        <label for="check-in-km">Km na entrada <span class="optional">(opcional)</span></label>
+        <div class="field__control">
+          <input id="check-in-km" [value]="mileage()" (input)="onMileage($event)" inputmode="numeric" placeholder="Ex.: 45.000" />
+          <span class="field__suffix">km</span>
+        </div>
+      </div>
+
+      @if (error(); as message) {
+        <p class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="clipboard" [size]="16" />
+        }
+        {{ isGuest() && guestMode() === 'new' ? 'Cadastrar e abrir OS' : 'Abrir OS' }}
+      </button>
+    </footer>
+  </form>
+</dialog>

@@ -16,19 +16,38 @@ export interface Appointment {
   status_label: string;
   service_reminder_id: number | null;
   created_by: string | null;
-  customer: { id: number; name: string; phone: string; phone_is_whatsapp: boolean; deleted: boolean };
+  /** null = agendado sem cadastro (vira cliente no check-in). */
+  customer: { id: number; name: string; phone: string; phone_is_whatsapp: boolean; deleted: boolean } | null;
+  /** Nome e telefone digitados de quem ainda não tem cadastro. */
+  contact: { name: string; phone: string | null } | null;
+  /** Nome para exibir: o do cadastro ou o digitado. */
+  display_name: string;
   vehicle: { id: number; brand: string; model: string; plate: string | null } | null;
+  /** Carro descrito em texto (quem não tem cadastro ou veículo ainda não cadastrado). */
+  vehicle_description: string | null;
   service_order: { id: number; number: string } | null;
 }
 
 export interface AppointmentPayload {
-  customer_id: number;
+  customer_id: number | null;
   vehicle_id: number | null;
+  /** Sem cadastro: nome (obrigatório), telefone e carro em texto. */
+  contact_name?: string;
+  contact_phone?: string;
+  vehicle_description?: string;
   /** ISO 8601 com fuso. */
   scheduled_at: string;
   duration_minutes: number;
   notes: string;
   service_reminder_id?: number | null;
+}
+
+export interface CheckInPayload {
+  mileage: number | null;
+  vehicle_id?: number | null;
+  vehicle?: { type: string; brand: string; model: string; plate: string };
+  customer_id?: number;
+  customer?: { name: string; phone: string; phone_is_whatsapp: boolean };
 }
 
 @Injectable({ providedIn: 'root' })
@@ -53,10 +72,14 @@ export class AgendaService {
     return this.http.post<ApiResource<Appointment>>(`${this.url}/${id}/status`, { status }).pipe(map(({ data }) => data));
   }
 
-  /** O carro chegou: abre a OS. Retorna o id da OS criada. */
-  checkIn(id: number, vehicleId: number | null, mileage: number | null): Observable<number> {
+  /**
+   * O carro chegou: abre a OS. Retorna o id da OS criada.
+   * Quem foi agendado sem cadastro vem com `customer_id` (já é cliente) ou `customer` (cadastrar agora);
+   * o carro pode ser um do cliente (`vehicle_id`) ou um novo (`vehicle`).
+   */
+  checkIn(id: number, payload: CheckInPayload): Observable<number> {
     return this.http
-      .post<ApiResource<{ service_order_id: number }>>(`${this.url}/${id}/check-in`, { vehicle_id: vehicleId, mileage })
+      .post<ApiResource<{ service_order_id: number }>>(`${this.url}/${id}/check-in`, payload)
       .pipe(map(({ data }) => data.service_order_id));
   }
 }

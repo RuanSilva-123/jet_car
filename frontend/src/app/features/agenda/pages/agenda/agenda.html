@@ -52,9 +52,15 @@
           </div>
           <div class="appointment__body">
             <div class="appointment__title">
-              <strong>{{ item.customer.name }}</strong>
+              <strong>{{ item.display_name }}</strong>
+              @if (!item.customer) {
+                <span class="guest" title="Ainda sem cadastro: cadastre no “Carro chegou”">sem cadastro</span>
+              }
               <span class="status">{{ item.status_label }}</span>
             </div>
+            @if (!item.vehicle && item.vehicle_description) {
+              <small>{{ item.vehicle_description }}</small>
+            }
             @if (item.vehicle) {
               <small>
                 {{ item.vehicle.brand }} {{ item.vehicle.model }}
@@ -80,8 +86,8 @@
                 @if (item.status === 'scheduled') {
                   <button type="button" class="btn btn--ghost btn--sm" (click)="setStatus(item, 'confirmed')" [disabled]="busy() === item.id">Confirmar</button>
                 }
-                @if (item.customer.phone_is_whatsapp) {
-                  <a class="btn btn--icon" [href]="whatsappLink(item)" target="_blank" rel="noopener" title="Confirmar pelo WhatsApp" aria-label="WhatsApp">
+                @if (whatsappLink(item); as link) {
+                  <a class="btn btn--icon" [href]="link" target="_blank" rel="noopener" title="Confirmar pelo WhatsApp" aria-label="WhatsApp">
                     <app-icon name="whatsapp" [size]="16" />
                   </a>
                 }

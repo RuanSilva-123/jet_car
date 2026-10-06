@@ -5,7 +5,7 @@ import { debounceTime, distinctUntilChanged, finalize, Subject, switchMap } from
 
 import { Combobox, ComboboxOption } from '../../../../shared/components/combobox/combobox';
 import { Icon } from '../../../../shared/components/icon/icon';
-import { formatPlate } from '../../../../shared/utils/br-format';
+import { formatPhone, formatPlate } from '../../../../shared/utils/br-format';
 import { Customer } from '../../../customers/models/customer';
 import { CustomersService } from '../../../customers/services/customers.service';
 import { ServiceOrdersService } from '../../../service-orders/services/service-orders.service';
@@ -29,6 +29,15 @@ const DURATIONS = [30, 60, 90, 120, 180, 240, 480];
   imports: [Icon, Combobox],
   templateUrl: './appointment-dialog.html',
   styleUrls: ['../../../../shared/styles/form-dialog.scss'],
+  styles: `
+    .who .segmented {
+      display: flex;
+
+      button {
+        flex: 1;
+      }
+    }
+  `,
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class AppointmentDialog {
@@ -45,6 +54,11 @@ export class AppointmentDialog {
   readonly closed = output<void>();
 
   protected readonly durations = DURATIONS;
+  /** Cliente cadastrado ou alguém que ainda não tem cadastro (só o nome). */
+  protected readonly mode = signal<'customer' | 'guest'>('customer');
+  protected readonly guestName = signal('');
+  protected readonly guestPhone = signal('');
+  protected readonly vehicleDescription = signal('');
   protected readonly customer = signal<Customer | null>(null);
   protected readonly customerOptions = signal<ComboboxOption[]>([]);
   protected readonly searching = signal(false);
@@ -102,6 +116,18 @@ export class AppointmentDialog {
     this.search$.next(search.trim());
   }
 
+  protected onGuestPhone(event: Event): void {
+    const element = event.target as HTMLInputElement;
+    element.value = formatPhone(element.value);
+    this.guestPhone.set(element.value);
+  }
+
+  protected setMode(mode: 'customer' | 'guest'): void {
+    this.mode.set(mode);
+    this.error.set(null);
+    if (mode === 'guest') setTimeout(() => document.getElementById('appointment-guest-name')?.focus());
+  }
+
   protected selectCustomer(option: ComboboxOption): void {
     const customer = this.customers.find((item) => String(item.id) === option.code) ?? null;
     this.customer.set(customer);
@@ -110,8 +136,13 @@ export class AppointmentDialog {
 
   protected submit(): void {
     const customer = this.customer();
-    if (!customer) {
-      this.error.set('Selecione o cliente.');
+    const guest = this.mode() === 'guest';
+    if (guest && !this.guestName().trim()) {
+      this.error.set('Digite o nome de quem vem.');
+      return;
+    }
+    if (!guest && !customer) {
+      this.error.set('Selecione o cliente ou use "Sem cadastro".');
       return;
     }
     if (!this.date() || !this.time()) {
@@ -120,8 +151,11 @@ export class AppointmentDialog {
     }
 
     const payload = {
-      customer_id: customer.id,
-      vehicle_id: this.vehicleId(),
+      customer_id: guest ? null : customer!.id,
+      vehicle_id: guest ? null : this.vehicleId(),
+      contact_name: guest ? this.guestName().trim() : '',
+      contact_phone: guest ? this.guestPhone() : '',
+      vehicle_description: guest || !this.vehicleId() ? this.vehicleDescription().trim() : '',
       // Horário local do navegador → ISO com fuso
       scheduled_at: new Date(`${this.date()}T${this.time()}:00`).toISOString(),
       duration_minutes: this.duration(),
@@ -154,6 +188,10 @@ export class AppointmentDialog {
     this.error.set(null);
     this.customer.set(null);
     this.customerOptions.set([]);
+    this.mode.set(appointment && !appointment.customer ? 'guest' : 'customer');
+    this.guestName.set(appointment?.contact?.name ?? '');
+    this.guestPhone.set(formatPhone(appointment?.contact?.phone ?? ''));
+    this.vehicleDescription.set(appointment?.vehicle_description ?? '');
     this.reminderId = prefill?.reminderId ?? null;
 
     if (appointment) {
@@ -163,7 +201,7 @@ export class AppointmentDialog {
       this.duration.set(appointment.duration_minutes);
       this.notes.set(appointment.notes ?? '');
       this.vehicleId.set(appointment.vehicle?.id ?? null);
-      this.loadCustomer(appointment.customer.id, appointment.vehicle?.id ?? null);
+      if (appointment.customer) this.loadCustomer(appointment.customer.id, appointment.vehicle?.id ?? null);
       return;
     }
 
