@@ -1,0 +1,221 @@
+<section class="page-header">
+  <div>
+    <h1>Contas a pagar</h1>
+    <p>Boletos, notas de fornecedor e despesas fixas. O que é pago aqui sai do fluxo de caixa.</p>
+  </div>
+  <div class="header-actions">
+    <a class="btn btn--ghost" routerLink="/finance/cash-flow"><app-icon name="trending-up" [size]="16" /> Fluxo de caixa</a>
+    <button type="button" class="btn btn--primary" (click)="newBill()"><app-icon name="plus" [size]="16" /> Nova conta</button>
+  </div>
+</section>
+
+<div class="segmented tabs" role="tablist" aria-label="Contas a pagar">
+  <button type="button" role="tab" [class.is-active]="tab() === 'bills'" [attr.aria-selected]="tab() === 'bills'" (click)="setTab('bills')">Contas</button>
+  <button type="button" role="tab" [class.is-active]="tab() === 'recurring'" [attr.aria-selected]="tab() === 'recurring'" (click)="setTab('recurring')">Despesas fixas</button>
+  <button type="button" role="tab" [class.is-active]="tab() === 'suppliers'" [attr.aria-selected]="tab() === 'suppliers'" (click)="setTab('suppliers')">Fornecedores</button>
+</div>
+
+@switch (tab()) {
+  @case ('recurring') {
+    <app-recurring-tab [suppliers]="suppliers()" />
+  }
+  @case ('suppliers') {
+    <app-supplier-tab (changed)="loadSuppliers()" (showBills)="showSupplierBills($event)" />
+  }
+  @default {
+    @if (page()?.summary; as summary) {
+      <div class="tiles">
+        <button type="button" class="tile" [class.is-active]="status() === 'overdue'" (click)="setStatus('overdue')">
+          <span class="tile__label">Vencidas</span>
+          <strong class="tile__value" [class.is-alert]="summary.overdue.count > 0">{{ summary.overdue.cents | money }}</strong>
+          <small>{{ summary.overdue.count }} conta(s)</small>
+        </button>
+        <div class="tile">
+          <span class="tile__label">Vencem hoje</span>
+          <strong class="tile__value" [class.is-warning]="summary.due_today.count > 0">{{ summary.due_today.cents | money }}</strong>
+          <small>{{ summary.due_today.count }} conta(s)</small>
+        </div>
+        <div class="tile">
+          <span class="tile__label">A pagar neste mês</span>
+          <strong class="tile__value">{{ summary.open_this_month.cents | money }}</strong>
+          <small>{{ summary.open_this_month.count }} conta(s) em aberto</small>
+        </div>
+        <div class="tile">
+          <span class="tile__label">Pago neste mês</span>
+          <strong class="tile__value">{{ summary.paid_this_month | money }}</strong>
+          <small>Já saiu do caixa</small>
+        </div>
+      </div>
+    }
+
+    <article class="card list">
+      <div class="toolbar">
+        <div class="segmented" role="tablist" aria-label="Situação">
+          @for (item of statuses; track item.value) {
+            <button type="button" role="tab" [class.is-active]="status() === item.value" [attr.aria-selected]="status() === item.value" (click)="setStatus(item.value)">
+              {{ item.label }}
+            </button>
+          }
+        </div>
+        <div class="filters">
+          <label class="search">
+            <app-icon name="search" />
+            <span class="sr-only">Buscar</span>
+            <input type="search" placeholder="Descrição, documento ou fornecedor" (input)="onSearch($any($event.target).value)" />
+          </label>
+          <label class="select">
+            <span class="sr-only">Mês</span>
+            <input type="month" [value]="month()" (change)="setMonth($any($event.target).value)" [title]="status() === 'paid' ? 'Mês do pagamento' : 'Mês do vencimento'" />
+          </label>
+          <label class="select">
+            <span class="sr-only">Categoria</span>
+            <select (change)="setCategory($any($event.target).value)">
+              <option value="" [selected]="!category()">Todas as categorias</option>
+              @for (option of categories; track option.value) {
+                <option [value]="option.value" [selected]="option.value === category()">{{ option.label }}</option>
+              }
+            </select>
+          </label>
+        </div>
+      </div>
+
+      @if (hasFilters()) {
+        <div class="active-filters">
+          @if (supplier(); as current) {
+            <span class="badge">Fornecedor: {{ current.name }}</span>
+          }
+          @if (page(); as result) {
+            <span>{{ result.meta.total }} conta(s) · {{ result.summary.filtered_cents | money }}</span>
+          }
+          <button type="button" class="link-button" (click)="clearFilters()">Limpar filtros</button>
+        </div>
+      }
+
+      <div class="list__body" [class.is-loading]="loading() && page()">
+        @if (loading() && !page()) {
+          <div class="list__state"><span class="spinner spinner--dark"></span></div>
+        } @else if (failed() && !page()) {
+          <div class="empty-state">
+            <span class="empty-state__icon"><app-icon name="alert" /></span>
+            <strong>Não foi possível carregar as contas</strong>
+          </div>
+        } @else if (page(); as result) {
+          @if (result.data.length === 0) {
+            <div class="empty-state">
+              <span class="empty-state__icon"><app-icon [name]="status() === 'paid' ? 'receipt' : 'check'" /></span>
+              <strong>
+                @switch (status()) {
+                  @case ('overdue') { Nenhuma conta vencida }
+                  @case ('paid') { Nenhuma conta paga{{ hasFilters() ? ' com esses filtros' : '' }} }
+                  @default { Nenhuma conta em aberto{{ hasFilters() ? ' com esses filtros' : '' }} }
+                }
+              </strong>
+              <p>Lance boletos e notas para ver o que vence e prever o caixa do mês.</p>
+            </div>
+          } @else {
+            <div class="table-scroll">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>{{ status() === 'paid' ? 'Pago em' : 'Vencimento' }}</th>
+                    <th>Conta</th>
+                    <th class="right">Valor</th>
+                    <th>Situação</th>
+                    <th class="actions"><span class="sr-only">Ações</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (bill of result.data; track bill.id) {
+                    <tr>
+                      <td class="date" [class.is-overdue]="bill.is_overdue">
+                        {{ (status() === 'paid' && bill.paid_at ? bill.paid_at : bill.due_date) + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+                        @if (bill.is_overdue) {
+                          <small>vencida</small>
+                        } @else if (!bill.paid_at && bill.due_date === today) {
+                          <small class="today">vence hoje</small>
+                        }
+                      </td>
+                      <td>
+                        <span class="cell-text">
+                          <strong>
+                            {{ bill.description }}
+                            @if (bill.installment_count && bill.installment_count > 1) {
+                              <span class="installment">{{ bill.installment_number }}/{{ bill.installment_count }}</span>
+                            }
+                            @if (bill.recurring_bill_id) {
+                              <app-icon name="repeat" [size]="12" class="recurring" title="Despesa fixa" />
+                            }
+                          </strong>
+                          <small>
+                            {{ bill.category_label }}{{ bill.supplier ? ' · ' + bill.supplier.name : '' }}{{ bill.document_number ? ' · nº ' + bill.document_number : '' }}
+                          </small>
+                        </span>
+                      </td>
+                      <td class="right strong">{{ bill.amount_cents | money }}</td>
+                      <td>
+                        @if (bill.paid_at) {
+                          <span class="badge badge--success" [title]="bill.paid_by ? 'Baixa por ' + bill.paid_by : ''">
+                            Paga · {{ bill.payment_method_label }}
+                          </span>
+                        } @else if (bill.is_overdue) {
+                          <span class="badge badge--brand">Vencida</span>
+                        } @else {
+                          <span class="badge">Em aberto</span>
+                        }
+                      </td>
+                      <td class="actions">
+                        @if (!bill.paid_at) {
+                          <button type="button" class="btn btn--sm btn--ghost" (click)="payingBill.set(bill)"><app-icon name="check" [size]="14" /> Pagar</button>
+                        }
+                        <button type="button" class="btn btn--icon" (click)="editBill(bill)" [attr.aria-label]="'Editar ' + bill.description" title="Editar">
+                          <app-icon name="pencil" [size]="16" />
+                        </button>
+                        @if (!bill.paid_at) {
+                          <button type="button" class="btn btn--icon is-danger" (click)="pendingDelete.set(bill)" [attr.aria-label]="'Excluir ' + bill.description" title="Excluir">
+                            <app-icon name="trash" [size]="16" />
+                          </button>
+                        } @else if (isMaster()) {
+                          <button type="button" class="btn btn--icon is-danger" (click)="pendingUnpay.set(bill)" aria-label="Estornar pagamento" title="Estornar pagamento">
+                            <app-icon name="refresh" [size]="16" />
+                          </button>
+                        }
+                      </td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+            <app-pagination [meta]="result.meta" (pageChange)="goTo($event)" />
+          }
+        }
+      </div>
+    </article>
+  }
+}
+
+<app-bill-dialog [open]="billDialogOpen()" [bill]="editingBill()" [suppliers]="suppliers()" (saved)="onBillSaved($event)" (closed)="billDialogOpen.set(false)" />
+<app-pay-bill-dialog [open]="payingBill() !== null" [bill]="payingBill()" (saved)="onPaid($event)" (closed)="payingBill.set(null)" />
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir conta?"
+  [message]="'“' + (pendingDelete()?.description ?? '') + '” sai das contas a pagar e do fluxo de caixa.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="working()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>
+
+<app-confirm-dialog
+  [open]="pendingUnpay() !== null"
+  title="Estornar pagamento?"
+  [message]="'“' + (pendingUnpay()?.description ?? '') + '” volta para em aberto e o valor retorna ao saldo do caixa.'"
+  confirmLabel="Estornar"
+  icon="refresh"
+  tone="danger"
+  [busy]="working()"
+  (confirmed)="confirmUnpay()"
+  (cancelled)="pendingUnpay.set(null)"
+/>

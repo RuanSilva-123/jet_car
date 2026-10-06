@@ -208,9 +208,12 @@ class ServiceOrderManager
             ->whereKeyNot($order->id)
             ->where('status', ServiceOrderStatus::Delivered->value)
             ->where('delivered_at', '>=', now()->subDays($days)->startOfDay())
-            ->with(['items' => fn ($query) => $query->where('is_done', true)])
+            // OS entregue = serviço feito, mesmo que ninguém tenha marcado o item como concluído
+            ->with('items')
             ->latest('delivered_at')
-            ->get();
+            ->get()
+            ->filter(fn (ServiceOrder $candidate) => $candidate->items->isNotEmpty())
+            ->values();
     }
 
     /**
@@ -230,7 +233,7 @@ class ServiceOrderManager
             throw ValidationException::withMessages(['warranty_of_id' => 'A OS escolhida não é deste veículo, não foi entregue ou já está fora da garantia.']);
         }
 
-        $items = $original->items()->whereIn('id', $itemIds)->where('is_done', true)->get();
+        $items = $original->items()->whereIn('id', $itemIds)->get();
         if ($items->count() !== count(array_unique($itemIds))) {
             throw ValidationException::withMessages(['item_ids' => 'Escolha serviços feitos na OS original.']);
         }

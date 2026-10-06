@@ -21,12 +21,15 @@ import { LaborServicesService } from '../../../services/services/labor-services.
 import { BudgetDecision, BudgetDecisionDialog } from '../../components/budget-decision-dialog/budget-decision-dialog';
 import { OrderStepper } from '../../components/order-stepper/order-stepper';
 import { PaymentDialog } from '../../components/payment-dialog/payment-dialog';
+import { PixDialog } from '../../components/pix-dialog/pix-dialog';
 import { StatusBadge } from '../../components/status-badge/status-badge';
 import { StatusChange, StatusDialog } from '../../components/status-dialog/status-dialog';
+import { WarrantyDialog } from '../../components/warranty-dialog/warranty-dialog';
 import {
   flowStep,
   lineCount,
   nextStep,
+  npsCategory,
   ServiceOrder,
   ServiceOrderEvent,
   ServiceOrderItem,
@@ -56,7 +59,13 @@ const EVENT_ICONS: Record<ServiceOrderEvent['type'], IconName> = {
   payment_removed: 'trash',
   inspection: 'camera',
   inspection_signed: 'signature',
+  warranty_linked: 'shield',
+  warranty_return: 'refresh',
+  warranty_unlinked: 'shield',
+  survey_answered: 'star',
 };
+
+const NPS_LABELS = { promoter: 'Promotor: indicaria a oficina', passive: 'Neutro', detractor: 'Detrator: ficou insatisfeito' } as const;
 
 @Component({
   selector: 'app-order-detail',
@@ -73,10 +82,12 @@ const EVENT_ICONS: Record<ServiceOrderEvent['type'], IconName> = {
     ServiceFormDialog,
     OrderStepper,
     PaymentDialog,
+    PixDialog,
+    WarrantyDialog,
     ConfirmDialog,
   ],
   templateUrl: './order-detail.html',
-  styleUrls: ['./order-detail.scss', './order-detail-extras.scss'],
+  styleUrls: ['./order-detail.scss', './order-detail-extras.scss', './order-detail-aftercare.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderDetail implements OnInit {
@@ -133,6 +144,47 @@ export class OrderDetail implements OnInit {
   protected readonly pendingPaymentRemoval = signal<ServiceOrderPayment | null>(null);
   protected readonly removingPayment = signal(false);
   protected readonly linkCopied = signal(false);
+  protected readonly pixOpen = signal(false);
+
+  // Garantia e pesquisa de satisfação
+  protected readonly warrantyOpen = signal(false);
+  protected readonly confirmUnlinkWarranty = signal(false);
+  protected readonly surveyCopied = signal(false);
+
+  /** Card de garantia: prazo (OS entregue) ou botão de marcar retorno (OS em aberto, ainda sem vínculo). */
+  protected readonly warrantyCard = computed<'until' | 'link' | null>(() => {
+    const order = this.order();
+    if (!order || order.warranty_of_id) return null;
+    if (order.status === 'delivered' && order.warranty_until) return 'until';
+    return this.canEdit() ? 'link' : null;
+  });
+  protected readonly warrantyActive = computed(() => {
+    const until = this.order()?.warranty_until;
+    return !!until && until >= new Date().toISOString().slice(0, 10);
+  });
+  /** Serviço de garantia já feito: o vínculo não pode mais ser desfeito (mesma regra da API). */
+  protected readonly hasDoneWarrantyItem = computed(() => !!this.order()?.items?.some((item) => item.warranty_of_item_id && item.is_done));
+
+  protected readonly surveyCategory = computed(() => {
+    const score = this.order()?.survey_score;
+    return score === null || score === undefined ? null : npsCategory(score);
+  });
+  protected readonly surveyLabel = computed(() => {
+    const category = this.surveyCategory();
+    return category ? NPS_LABELS[category] : '';
+  });
+
+  protected readonly whatsappSurveyLink = computed(() => {
+    const order = this.order();
+    if (!order?.survey_url || !order.customer?.phone_is_whatsapp) return null;
+    const text = [
+      `Olá, ${order.customer.name.split(' ')[0]}! Obrigado por confiar o seu ${order.vehicle?.model ?? 'veículo'} à nossa oficina.`,
+      '',
+      'Pode nos dizer, de 0 a 10, o quanto você nos indicaria? É rapidinho:',
+      order.survey_url,
+    ].join('\n');
+    return `https://wa.me/55${order.customer.phone}?text=${encodeURIComponent(text)}`;
+  });
 
   protected readonly eventIcons = EVENT_ICONS;
 
@@ -535,6 +587,33 @@ export class OrderDetail implements OnInit {
       },
       () => this.toast.error('Não foi possível copiar. Selecione o link e copie manualmente.'),
     );
+  }
+
+  protected copySurveyLink(): void {
+    const url = this.order()?.survey_url;
+    if (!url) return;
+    navigator.clipboard?.writeText(url).then(
+      () => {
+        this.surveyCopied.set(true);
+        setTimeout(() => this.surveyCopied.set(false), 2000);
+      },
+      () => this.toast.error('Não foi possível copiar. Selecione o link e copie manualmente.'),
+    );
+  }
+
+  protected onWarrantyLinked(updated: ServiceOrder): void {
+    this.order.set(updated);
+    this.warrantyOpen.set(false);
+    this.toast.success(`Retorno em garantia da OS #${updated.warranty_of?.number ?? ''} registrado.`);
+  }
+
+  protected unlinkWarranty(): void {
+    const order = this.order();
+    if (!order) return;
+    this.run(this.orders.unlinkWarranty(order.id), () => {
+      this.confirmUnlinkWarranty.set(false);
+      this.toast.success('Vínculo de garantia desfeito.');
+    });
   }
 
   protected addNote(): void {

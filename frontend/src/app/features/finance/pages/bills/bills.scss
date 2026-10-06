@@ -1,0 +1,133 @@
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 20px;
+}
+
+.tabs {
+  justify-self: start;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 12px;
+}
+
+.tile {
+  display: grid;
+  align-content: start;
+  gap: 2px;
+  padding: 16px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font: inherit;
+  text-align: left;
+  box-shadow: var(--shadow-sm);
+
+  &:is(button) {
+    cursor: pointer;
+  }
+
+  &.is-active {
+    border-color: var(--color-brand);
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+
+  &__label {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &__value {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-variant-numeric: tabular-nums;
+
+    &.is-alert {
+      color: var(--color-danger);
+    }
+
+    &.is-warning {
+      color: var(--color-warning);
+    }
+  }
+
+  small {
+    color: var(--color-text-muted);
+    font-size: 12px;
+  }
+}
+
+.filters {
+  display: flex;
+  flex: 1 1 420px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.select {
+  input,
+  select {
+    height: 40px;
+    padding: 0 10px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-hover);
+    color: var(--color-text);
+    font: inherit;
+  }
+}
+
+.active-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+  font-size: 13px;
+}
+
+.date {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+
+  small {
+    display: block;
+    color: var(--color-text-muted);
+    font-size: 12px;
+  }
+
+  &.is-overdue,
+  &.is-overdue small {
+    color: var(--color-danger);
+  }
+
+  .today {
+    color: var(--color-warning);
+  }
+}
+
+.installment {
+  margin-left: 4px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--color-neutral-soft);
+  color: var(--color-text-muted);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.recurring {
+  margin-left: 4px;
+  color: var(--color-text-muted);
+  vertical-align: -1px;
+}

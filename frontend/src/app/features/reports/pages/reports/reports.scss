@@ -85,3 +85,38 @@
     font-weight: 700;
   }
 }
+
+// Nota da pesquisa de satisfação, com a cor da categoria NPS
+.score {
+  display: inline-grid;
+  place-items: center;
+  min-width: 26px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 6px;
+  font-weight: 700;
+
+  &--promoter {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  &--passive {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  &--detractor {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+}
+
+.nps-bad {
+  color: var(--color-danger);
+}
+
+td.wrap {
+  min-width: 220px;
+  white-space: normal;
+}

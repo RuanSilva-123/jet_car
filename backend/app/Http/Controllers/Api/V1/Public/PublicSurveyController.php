@@ -77,7 +77,7 @@ class PublicSurveyController extends Controller
 
         return response()->json(['data' => [
             'state' => $state,
-            'shop' => ['name' => ShopSettings::get()['name']],
+            'shop' => ['name' => ShopSettings::get()['name'], 'phone' => ShopSettings::get()['phone']],
             'order' => [
                 'number' => $order->number(),
                 'customer_first_name' => Str::of($order->customer->trade_name ?: $order->customer->name)->explode(' ')->first(),

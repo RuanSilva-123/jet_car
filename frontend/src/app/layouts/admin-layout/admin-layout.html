@@ -16,6 +16,7 @@
               class="sidebar__link"
               [routerLink]="item.route"
               routerLinkActive="sidebar__link--active"
+              [routerLinkActiveOptions]="{ exact: !!item.exact }"
               (click)="closeSidebar()"
             >
               <app-icon [name]="item.icon" />

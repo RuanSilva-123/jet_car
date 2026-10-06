@@ -5,6 +5,7 @@ import { finalize } from 'rxjs';
 
 import { Icon } from '../../shared/components/icon/icon';
 import { Logo } from '../../shared/components/logo/logo';
+import { PixChargeView } from '../../shared/components/pix-charge/pix-charge';
 import { BrFormatPipe } from '../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../shared/pipes/money.pipe';
 import { PublicBudget, PublicBudgetService } from './public-budget.service';
@@ -15,7 +16,7 @@ import { PublicBudget, PublicBudgetService } from './public-budget.service';
  */
 @Component({
   selector: 'app-public-budget',
-  imports: [DatePipe, Icon, Logo, BrFormatPipe, MoneyPipe],
+  imports: [DatePipe, Icon, Logo, PixChargeView, BrFormatPipe, MoneyPipe],
   templateUrl: './public-budget.html',
   styleUrl: './public-budget.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

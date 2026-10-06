@@ -74,6 +74,7 @@ Em dev, `vendor/` (PHP) e `node_modules/` (Angular) ficam em **volumes Docker**,
 | `scheduler` | `php artisan schedule:work` (mesma imagem do `app`)      | dev + prod |
 | `postgres`  | Banco de dados (volume persistente)                      | dev + prod |
 | `redis`     | Cache, sessões e filas                                   | dev + prod |
+| `backup`    | `pg_dump` diário + cópia das fotos em `./backups` (imagem `postgres:18-alpine`) | dev + prod |
 | `node`      | `ng serve` com hot reload                                | só dev     |
 | `mailpit`   | Captura e-mails enviados                                 | só dev     |
 
@@ -145,9 +146,10 @@ frontend/src/
 │   │   ├── service-orders/      # ordens de serviço, vistoria, pagamentos + histórico do veículo
 │   │   ├── parts/               # estoque de peças
 │   │   ├── reminders/           # lembretes de revisão
-│   │   ├── finance/             # contas a receber e recebimentos (sem mecânico)
+│   │   ├── finance/             # contas a receber, contas a pagar, fluxo de caixa (sem mecânico)
 │   │   ├── reports/             # relatórios + CSV (sem mecânico)
-│   │   ├── public-budget/       # orçamento aberto pelo cliente (sem login)
+│   │   ├── public-budget/       # orçamento aberto pelo cliente, com Pix (sem login)
+│   │   ├── public-survey/       # pesquisa de satisfação do cliente (sem login)
 │   │   └── users/               # lista + cadastro/edição (só master)
 │   ├── app.routes.ts
 │   └── app.config.ts
@@ -249,6 +251,7 @@ O detalhe da OS traz `public_budget_url` quando o orçamento está completo. O c
 - **Sem dados pessoais** na resposta: só o primeiro nome do cliente, o veículo e os itens.
 - **Valor conferido:** se a oficina mudou o orçamento depois do envio, `total_cents` não bate e a API pede para o cliente conferir de novo (422).
 - Quem recusou só decide de novo depois de um novo envio. A linha do tempo registra "pelo link", sem usuário.
+- **Pix:** com o orçamento aprovado e saldo em aberto, a resposta traz `pix` (QR Code + copia-e-cola do saldo) e a página mostra "Pague com Pix". Serviços refeitos na garantia vêm com `warranty: true` e aparecem como "Garantia".
 
 ## Pagamentos e contas a receber (`/finance`)
 
@@ -262,6 +265,35 @@ O detalhe da OS traz `public_budget_url` quando o orçamento está completo. O c
 - O total pago fica em `service_orders.paid_cents`. A OS informa `balance_cents` e `payment_status` (`none`, `pending`, `partial`, `paid`).
 - O valor não pode passar do saldo; o registro trava a linha da OS (`lockForUpdate`) para dois recebimentos simultâneos não estourarem o saldo.
 - Cada recebimento/estorno vira evento na linha do tempo.
+
+## Pix copia-e-cola e QR Code
+
+Sem integração com banco: o painel gera um **Pix estático com valor** a partir da chave da oficina (Dados da oficina → Pix: tipo, chave, nome do recebedor e cidade). O dinheiro cai direto na conta; quem confere o extrato registra o pagamento na OS.
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/service-orders/{id}/pix?amount_cents=` | cobrança do saldo em aberto (ou de parte dele) — financeiro; 404 sem chave ou sem saldo |
+
+- `App\Support\Pix\PixPayload` monta o BR Code (padrão EMV do Banco Central: campos ID + tamanho + valor, `txid` = número da OS, CRC16-CCITT no fim). `PixKey` valida e normaliza a chave (CPF/CNPJ só dígitos, celular `+55…`, e-mail minúsculo, chave aleatória em UUID). `PixCharge` gera o QR em PNG (`chillerlan/php-qrcode`, data URI).
+- Aparece em três lugares: diálogo "Cobrar com Pix" na OS (com envio pelo WhatsApp), link público do orçamento aprovado e comprovante em PDF (OS com saldo).
+
+## Contas a pagar e fluxo de caixa (`/finance/bills`, `/finance/cash-flow`)
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/bills` | `status` = `open` (padrão), `overdue`, `paid`, `all`; `month` (vencimento, ou pagamento para pagas), `category`, `supplier_id`, `search`; resumo (vencidas, vencem hoje, em aberto e pago no mês) |
+| `POST /api/v1/bills` | descrição, categoria, fornecedor, valor, vencimento; `installments` divide em parcelas mensais (centavos que sobram na 1ª); `paid_at` + `payment_method` lança já paga (só à vista) |
+| `PUT /api/v1/bills/{id}` · `DELETE …` | conta paga não muda valor/vencimento nem é excluída |
+| `POST …/{id}/pay` · `POST …/{id}/unpay` | baixa com data, forma e valor efetivamente pago (juros/desconto); estorno **só master** |
+| `GET/POST/PUT/DELETE /api/v1/recurring-bills` | despesas fixas (aluguel, internet, contador...): valor e dia do vencimento (31 vira o último dia em meses curtos), início, fim opcional, pausa |
+| `GET/POST/PUT/DELETE /api/v1/suppliers` | fornecedores com total em aberto; excluir **só master** (as contas ficam no histórico) |
+| `GET /api/v1/cash-flow?month=YYYY-MM` | dias do mês com entradas, saídas, contas a vencer e saldo (realizado e previsto), saídas por categoria e resumo; `&format=csv` exporta |
+| `GET/PUT /api/v1/settings/finance` | saldo inicial do caixa numa data (`PUT` só master) |
+
+- **Despesas fixas:** `php artisan jetcar:recurring-bills` roda todo dia às 5h30 no `scheduler` e lança a conta do mês de cada despesa ativa; a chave única (`recurring_bill_id`, `due_date`) impede duplicar. Cadastrar ou editar uma despesa já lança a do mês.
+- **Saldo:** saldo inicial + pagamentos das OS − contas pagas desde a data do saldo inicial. A previsão do mês desconta as contas em aberto (as vencidas entram como "hoje") e mostra também o valor recebendo as OS com saldo.
+- **Compra de peças:** a entrada no estoque pode lançar a conta a pagar (quantidade × custo, com fornecedor, vencimento e parcelas) na mesma transação.
+- Todas as telas exigem o perfil financeiro (todos menos o mecânico).
 
 ## Estoque de peças (`/parts`)
 
@@ -307,18 +339,60 @@ O detalhe da OS traz `public_budget_url` quando o orçamento está completo. O c
 
 - O banco guarda em UTC; o painel mostra no horário do navegador. Textos gerados pelo servidor usam `DISPLAY_TIMEZONE` (padrão `America/Sao_Paulo`).
 
+## Retorno em garantia
+
+O prazo fica em Dados da oficina (`warranty_days`, padrão 90). Na OS em aberto, "Marcar retorno em garantia" lista as OS **entregues do mesmo veículo dentro do prazo** e os serviços delas.
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/service-orders/{id}/warranty/candidates` | OS candidatas com os serviços |
+| `POST /api/v1/service-orders/{id}/warranty` | `warranty_of_id` + `item_ids`: os serviços entram nesta OS **sem custo**, ligados ao serviço original (`warranty_of_item_id`) |
+| `DELETE /api/v1/service-orders/{id}/warranty` | desfaz (bloqueado se algum serviço de garantia já foi feito) |
+
+- As duas OS ganham eventos na linha do tempo e avisos com link uma para a outra; a lista de OS mostra o selo "Garantia"; os PDFs mostram "Garantia" no lugar do valor.
+- Relatório `warranty`: quais serviços mais voltam, taxa de retorno sobre as execuções entregues no período e quem tinha feito o serviço original. Serviços de garantia não contam como venda no relatório de serviços.
+
+## Pesquisa de satisfação (`/avaliacao/{token}`)
+
+Depois da entrega, o detalhe da OS traz `survey_url` e o botão "Pedir avaliação pelo WhatsApp". O cliente dá uma nota de 0 a 10 ("o quanto indicaria a oficina") e um comentário opcional, sem login.
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/public/surveys/{token}` | `state` = `open`, `answered` ou `unavailable` (OS reaberta/cancelada) |
+| `POST /api/v1/public/surveys/{token}` | `score` 0–10 e `comment`; uma resposta por OS (trava a linha) |
+
+- Token assinado como o do orçamento (`App\Support\SignedToken`, finalidade `survey`, válido 30 dias); um token de orçamento não abre a pesquisa.
+- **NPS** = % promotores (9–10) − % detratores (0–6). O dashboard mostra o NPS dos últimos 90 dias, as últimas respostas, as entregas recentes sem avaliação e os retornos em garantia do mês. Relatório `satisfaction`: respostas do período, piores notas primeiro.
+
+## Horário nos PDFs
+
+O banco guarda em UTC; `App\Support\LocalTime` converte para `DISPLAY_TIMEZONE` (padrão `America/Sao_Paulo`) tudo que tem hora nos PDFs (emissão, entrada, conclusão, entrega, serviços feitos). Datas sem hora (previsão, data do pagamento) não são convertidas.
+
+## Backup automático
+
+Container `backup` (imagem `postgres:18-alpine`, mesma versão do servidor) com os scripts de `docker/backup/`:
+
+- `loop.sh`: na subida, faz um backup se não houver um das últimas 24 h; depois, todo dia em `BACKUP_TIME` (padrão `03:00`, fuso `BACKUP_TZ`).
+- `backup.sh`: `pg_dump -Fc` conferido com `pg_restore --list` antes de valer (`backups/db/jetcar_AAAA-MM-DD_HHMMSS.dump`), cópia das fotos/anexos (`backups/files/storage_*.tar.gz`), apaga cópias com mais de `BACKUP_KEEP_DAYS` dias (padrão 14) e grava `backups/last-backup.json`.
+- `restore.sh <arquivo> --confirmar`: faz um backup de segurança (`…_antes-restore.dump`) e restaura numa transação só.
+- O PHP lê `last-backup.json` (pasta montada só leitura): Dados da oficina mostra a situação e o dashboard do master avisa quando o backup falhou, parou (mais de 26 h) ou nunca rodou. `GET /api/v1/settings/backup` (master).
+
+Restaurar (passo a passo no README): pare `app`, `queue` e `scheduler`, rode `docker compose exec backup sh /scripts/restore.sh <arquivo>.dump --confirmar` e suba de novo. As fotos: `docker compose exec app tar -xzf /backups/files/<arquivo>.tar.gz -C storage/app`.
+
 ## Dashboard (`/dashboard`)
 
-`GET /api/v1/dashboard?budget_days=3`: OS em aberto por status, atrasadas (previsão vencida e ainda não prontas), orçamentos enviados há mais de X dias sem resposta, veículos prontos esperando retirada, agenda do dia, lembretes pendentes e estoque baixo. Para quem acessa o financeiro: faturamento do mês (OS entregues), ticket médio, comparação com o mesmo período do mês anterior, recebido no mês e total a receber. "Hoje" e "mês" seguem `DISPLAY_TIMEZONE`.
+`GET /api/v1/dashboard?budget_days=3`: OS em aberto por status, atrasadas (previsão vencida e ainda não prontas), orçamentos enviados há mais de X dias sem resposta, veículos prontos esperando retirada, agenda do dia, lembretes pendentes e estoque baixo. Para quem acessa o financeiro: faturamento do mês (OS entregues), ticket médio, comparação com o mesmo período do mês anterior, recebido no mês, total a receber, contas a pagar vencidas e dos próximos 7 dias e saldo do caixa. Para todos: satisfação (NPS) e retornos em garantia do mês. Para o master: aviso de backup. "Hoje" e "mês" seguem `DISPLAY_TIMEZONE`.
 
 ## Relatórios (`/reports`)
 
-`GET /api/v1/reports/{revenue|services|customers|mechanics}?from&to` (padrão: mês atual). `?format=csv` baixa o mesmo relatório para o Excel (`;`, vírgula decimal, UTF-8 com BOM).
+`GET /api/v1/reports/{revenue|services|customers|mechanics|warranty|satisfaction}?from&to` (padrão: mês atual). `?format=csv` baixa o mesmo relatório para o Excel (`;`, vírgula decimal, UTF-8 com BOM).
 
 - **revenue:** OS entregues por dia ou mês (`group`), com mão de obra, peças, descontos, ticket médio e o que foi recebido.
 - **services:** serviços feitos nas OS entregues, por quantidade e faturamento.
 - **customers:** clientes atendidos no período, gasto, primeira/última visita e se já tinham vindo antes (`only_returning=1`).
 - **mechanics:** serviços concluídos por mecânico no período (produção).
+- **warranty:** retornos em garantia por serviço, taxa de retorno e quem fez o serviço original.
+- **satisfaction:** avaliações respondidas no período com NPS, média e distribuição.
 
 Agrupamentos feitos em PHP (`App\Services\Reports\ReportBuilder`), para funcionar igual no PostgreSQL e no SQLite dos testes.
 

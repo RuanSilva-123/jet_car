@@ -43,6 +43,55 @@
           }
         </div>
 
+        @if (mode() === 'entry' && canManageFinance()) {
+          <div class="bill-box" [class.is-on]="createBill()">
+            <label class="checkbox">
+              <input type="checkbox" [checked]="createBill()" (change)="toggleBill($any($event.target).checked)" />
+              <span>
+                Lançar no contas a pagar
+                @if (billTotal() > 0) {
+                  <strong>· {{ billTotal() | money }}</strong>
+                }
+              </span>
+            </label>
+            @if (createBill()) {
+              <div class="dialog__grid dialog__grid--3">
+                <div class="field">
+                  <label for="stock-bill-due">Vencimento</label>
+                  <div class="field__control">
+                    <input id="stock-bill-due" type="date" [value]="billDueDate()" (input)="billDueDate.set($any($event.target).value)" />
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="stock-bill-supplier">Fornecedor</label>
+                  <div class="field__control">
+                    <select id="stock-bill-supplier" (change)="billSupplierId.set($any($event.target).value ? +$any($event.target).value : null)">
+                      <option value="" [selected]="billSupplierId() === null">Sem fornecedor</option>
+                      @for (supplier of suppliers(); track supplier.id) {
+                        <option [value]="supplier.id" [selected]="supplier.id === billSupplierId()">{{ supplier.name }}</option>
+                      }
+                    </select>
+                  </div>
+                </div>
+                <div class="field">
+                  <label for="stock-bill-installments">Parcelas</label>
+                  <div class="field__control">
+                    <input
+                      id="stock-bill-installments"
+                      type="number"
+                      min="1"
+                      max="48"
+                      [value]="billInstallments()"
+                      (input)="billInstallments.set(+$any($event.target).value || 1)"
+                    />
+                    <span class="field__suffix">x</span>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+
         <div class="field">
           <label for="stock-notes">Observação <span class="optional">(opcional)</span></label>
           <div class="field__control">

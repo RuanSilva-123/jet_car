@@ -1,0 +1,186 @@
+<article class="card list">
+  <div class="toolbar">
+    <p class="toolbar__text">
+      @if (items().length) {
+        <strong>{{ monthly() | money }}</strong> por mês em despesas fixas ativas. A conta de cada mês é lançada sozinha.
+      } @else {
+        Aluguel, internet, contador, sistema... Cadastre uma vez e a conta aparece todo mês.
+      }
+    </p>
+    <button type="button" class="btn btn--primary btn--sm" (click)="create()"><app-icon name="plus" [size]="16" /> Nova despesa fixa</button>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && items().length">
+    @if (loading() && !items().length) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (items().length === 0) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="repeat" /></span>
+        <strong>Nenhuma despesa fixa</strong>
+        <p>Assim o fluxo de caixa já mostra o que vai sair no mês antes de a conta chegar.</p>
+      </div>
+    } @else {
+      <div class="table-scroll">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Despesa</th>
+              <th>Vencimento</th>
+              <th class="right">Valor</th>
+              <th>Situação</th>
+              <th class="actions"><span class="sr-only">Ações</span></th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (item of items(); track item.id) {
+              <tr [class.is-inactive]="!item.is_active">
+                <td>
+                  <span class="cell-text">
+                    <strong>{{ item.description }}</strong>
+                    <small>{{ item.category_label }}{{ item.supplier ? ' · ' + item.supplier.name : '' }}</small>
+                  </span>
+                </td>
+                <td>Todo dia {{ item.day_of_month }}</td>
+                <td class="right strong">{{ item.amount_cents | money }}</td>
+                <td>
+                  @if (!item.is_active) {
+                    <span class="badge">Pausada</span>
+                  } @else if (item.ends_on) {
+                    <span class="badge badge--brand">Até {{ item.ends_on.slice(5, 7) }}/{{ item.ends_on.slice(0, 4) }}</span>
+                  } @else {
+                    <span class="badge badge--success badge--dot">Ativa</span>
+                  }
+                </td>
+                <td class="actions">
+                  <button type="button" class="btn btn--icon" (click)="edit(item)" [attr.aria-label]="'Editar ' + item.description" title="Editar">
+                    <app-icon name="pencil" [size]="16" />
+                  </button>
+                  <button type="button" class="btn btn--icon is-danger" (click)="pendingDelete.set(item)" [attr.aria-label]="'Excluir ' + item.description" title="Excluir">
+                    <app-icon name="trash" [size]="16" />
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</article>
+
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="recurring-dialog-title">
+  <form (submit)="$event.preventDefault(); save()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="repeat" [size]="20" /></span>
+      <div>
+        <h2 id="recurring-dialog-title">{{ editing() ? 'Editar despesa fixa' : 'Nova despesa fixa' }}</h2>
+        <p>Vira uma conta a pagar todo mês, no dia escolhido.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="formOpen.set(false)" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      <div class="field" [class.field--invalid]="errors().description">
+        <label for="recurring-description">Descrição</label>
+        <div class="field__control">
+          <input id="recurring-description" maxlength="150" placeholder="Ex.: Aluguel do galpão" [value]="description()" (input)="description.set($any($event.target).value)" />
+        </div>
+        @if (errors().description; as message) {
+          <small class="field__error">{{ message }}</small>
+        }
+      </div>
+      <div class="dialog__grid">
+        <div class="field">
+          <label for="recurring-category">Categoria</label>
+          <div class="field__control">
+            <select id="recurring-category" (change)="category.set($any($event.target).value)">
+              @for (option of categories; track option.value) {
+                <option [value]="option.value" [selected]="option.value === category()">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field" [class.field--invalid]="errors().supplier_id">
+          <label for="recurring-supplier">Fornecedor <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <select id="recurring-supplier" (change)="supplierId.set($any($event.target).value ? +$any($event.target).value : null)">
+              <option value="" [selected]="supplierId() === null">Sem fornecedor</option>
+              @for (supplier of suppliers(); track supplier.id) {
+                <option [value]="supplier.id" [selected]="supplier.id === supplierId()">{{ supplier.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field" [class.field--invalid]="errors().amount_cents">
+          <label for="recurring-amount">Valor mensal</label>
+          <div class="field__control">
+            <span class="field__suffix">R$</span>
+            <input id="recurring-amount" inputmode="numeric" [value]="amount()" (input)="onAmount($event)" />
+          </div>
+          @if (errors().amount_cents; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().day_of_month">
+          <label for="recurring-day">Dia do vencimento</label>
+          <div class="field__control">
+            <input id="recurring-day" type="number" min="1" max="31" [value]="day()" (input)="day.set(+$any($event.target).value)" />
+          </div>
+          @if (errors().day_of_month; as message) {
+            <small class="field__error">{{ message }}</small>
+          } @else if (day() > 28) {
+            <small class="muted">Em meses mais curtos, vence no último dia.</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().starts_on">
+          <label for="recurring-start">Começa em</label>
+          <div class="field__control">
+            <input id="recurring-start" type="date" [value]="startsOn()" (input)="startsOn.set($any($event.target).value)" />
+          </div>
+          @if (errors().starts_on; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().ends_on">
+          <label for="recurring-end">Termina em <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="recurring-end" type="date" [value]="endsOn()" (input)="endsOn.set($any($event.target).value)" />
+          </div>
+          @if (errors().ends_on; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+      </div>
+      <label class="checkbox">
+        <input type="checkbox" [checked]="active()" (change)="active.set($any($event.target).checked)" />
+        <span>Ativa (desmarque para pausar sem apagar)</span>
+      </label>
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="formOpen.set(false)" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        Salvar
+      </button>
+    </footer>
+  </form>
+</dialog>
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir despesa fixa?"
+  [message]="'“' + (pendingDelete()?.description ?? '') + '” deixa de gerar contas. As contas já lançadas continuam.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>

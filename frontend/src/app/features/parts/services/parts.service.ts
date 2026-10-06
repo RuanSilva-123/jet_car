@@ -42,7 +42,17 @@ export class PartsService {
   /** Entrada (compra) ou ajuste de inventário (quantidade contada). */
   moveStock(
     id: number,
-    movement: { type: 'entry' | 'adjustment'; quantity: number; unit_cost_cents: number | null; notes: string },
+    movement: {
+      type: 'entry' | 'adjustment';
+      quantity: number;
+      unit_cost_cents: number | null;
+      notes: string;
+      /** Compra: já lança a conta a pagar (quantidade × custo). */
+      create_bill?: boolean;
+      bill_due_date?: string | null;
+      bill_supplier_id?: number | null;
+      bill_installments?: number;
+    },
   ): Observable<Part> {
     return this.http.post<ApiResource<Part>>(`${this.url}/${id}/stock`, movement).pipe(map(({ data }) => data));
   }

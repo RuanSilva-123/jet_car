@@ -9,6 +9,7 @@ use App\Models\LaborService;
 use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Support\BudgetLink;
 use App\Support\ShopSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -84,6 +85,29 @@ class WarrantyReturnTest extends TestCase
 
         $this->getJson('/api/v1/service-orders')->assertJsonPath('data.0.warranty_of_id', $original->id);
         $this->get("/api/v1/service-orders/{$order->id}/pdf/report")->assertOk();
+
+        // No link do orçamento o cliente vê "Garantia" no lugar do valor
+        $this->getJson('/api/v1/public/budgets/'.BudgetLink::make($order->fresh())['token'])
+            ->assertOk()
+            ->assertJsonPath('data.order.items.0.warranty', true);
+    }
+
+    public function test_delivered_order_counts_even_without_ticked_services(): void
+    {
+        // Entregue sem marcar os itens como feitos: o serviço foi feito do mesmo jeito
+        $original = $this->delivered(10);
+        $original->items()->update(['is_done' => false, 'done_at' => null]);
+        ServiceOrder::factory()->for($this->vehicle)->status(ServiceOrderStatus::Delivered)->create(['customer_id' => $this->vehicle->customer_id]); // sem serviços
+        $order = $this->newOrder();
+
+        $this->getJson("/api/v1/service-orders/{$order->id}/warranty/candidates")
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $original->id);
+
+        $this->postJson("/api/v1/service-orders/{$order->id}/warranty", ['warranty_of_id' => $original->id, 'item_ids' => [$original->items()->value('id')]])
+            ->assertOk()
+            ->assertJsonPath('data.warranty_of.id', $original->id);
     }
 
     public function test_out_of_warranty_is_refused(): void

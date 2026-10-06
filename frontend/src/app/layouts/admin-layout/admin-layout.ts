@@ -15,6 +15,8 @@ interface NavItem {
   masterOnly?: boolean;
   /** Financeiro: oculto para o mecânico. */
   financeOnly?: boolean;
+  /** Ativo só na rota exata (ex.: /finance não acende em /finance/bills). */
+  exact?: boolean;
 }
 
 interface NavSection {
@@ -65,7 +67,9 @@ export class AdminLayout {
     {
       title: 'Financeiro',
       items: [
-        { label: 'Contas a receber', icon: 'wallet', route: '/finance', financeOnly: true },
+        { label: 'Fluxo de caixa', icon: 'trending-up', route: '/finance/cash-flow', financeOnly: true },
+        { label: 'Contas a receber', icon: 'wallet', route: '/finance', financeOnly: true, exact: true },
+        { label: 'Contas a pagar', icon: 'receipt', route: '/finance/bills', financeOnly: true },
         { label: 'Relatórios', icon: 'bar-chart', route: '/reports', financeOnly: true },
       ],
     },

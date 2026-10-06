@@ -4,7 +4,8 @@ import { map, Observable } from 'rxjs';
 
 import { API_URL, ApiResource, Paginated } from '../../../core/http/api';
 import { Customer, Vehicle } from '../../customers/models/customer';
-import { PaymentMethod, ServiceOrder, ServiceOrderPayload, ServiceOrderStatus } from '../models/service-order';
+import { PixCharge } from '../../../shared/components/pix-charge/pix-charge';
+import { PaymentMethod, ServiceOrder, ServiceOrderPayload, ServiceOrderStatus, WarrantyCandidate } from '../models/service-order';
 
 export type ServiceOrderStatusFilter = 'active' | 'all' | ServiceOrderStatus;
 
@@ -135,6 +136,30 @@ export class ServiceOrdersService {
 
   removePayment(id: number, paymentId: number): Observable<ServiceOrder> {
     return this.http.delete<ApiResource<ServiceOrder>>(`${this.url}/${id}/payments/${paymentId}`).pipe(map(({ data }) => data));
+  }
+
+  /** Cobrança Pix (QR Code + copia-e-cola) do saldo em aberto ou de parte dele. */
+  pix(id: number, amountCents?: number | null): Observable<PixCharge> {
+    let params = new HttpParams();
+    if (amountCents) params = params.set('amount_cents', amountCents);
+    return this.http.get<ApiResource<PixCharge>>(`${this.url}/${id}/pix`, { params }).pipe(map(({ data }) => data));
+  }
+
+  /** OS entregues do mesmo veículo ainda na garantia (para marcar o retorno). */
+  warrantyCandidates(id: number): Observable<{ candidates: WarrantyCandidate[]; warrantyDays: number }> {
+    return this.http
+      .get<{ data: WarrantyCandidate[]; warranty_days: number }>(`${this.url}/${id}/warranty/candidates`)
+      .pipe(map(({ data, warranty_days }) => ({ candidates: data, warrantyDays: warranty_days })));
+  }
+
+  linkWarranty(id: number, warrantyOfId: number, itemIds: number[]): Observable<ServiceOrder> {
+    return this.http
+      .post<ApiResource<ServiceOrder>>(`${this.url}/${id}/warranty`, { warranty_of_id: warrantyOfId, item_ids: itemIds })
+      .pipe(map(({ data }) => data));
+  }
+
+  unlinkWarranty(id: number): Observable<ServiceOrder> {
+    return this.http.delete<ApiResource<ServiceOrder>>(`${this.url}/${id}/warranty`).pipe(map(({ data }) => data));
   }
 
   /**

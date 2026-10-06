@@ -9,7 +9,7 @@ import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { formatMoney, formatPlate } from '../../../../shared/utils/br-format';
 import { formatStock } from '../../../parts/models/part';
-import { STATUS_META } from '../../../service-orders/models/service-order';
+import { npsCategory, STATUS_META } from '../../../service-orders/models/service-order';
 import { DashboardData, DashboardOrder, DashboardService } from '../../services/dashboard.service';
 
 const BUDGET_DAYS_KEY = 'jetcar.dashboard.budgetDays';
@@ -19,7 +19,7 @@ const BUDGET_DAYS_KEY = 'jetcar.dashboard.budgetDays';
   selector: 'app-dashboard',
   imports: [DatePipe, RouterLink, Icon, BrFormatPipe, MoneyPipe],
   templateUrl: './dashboard.html',
-  styleUrl: './dashboard.scss',
+  styleUrls: ['./dashboard.scss', './dashboard-extras.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class Dashboard implements OnInit {
@@ -47,6 +47,30 @@ export class Dashboard implements OnInit {
     const finance = this.data()?.finance;
     if (!finance || !finance.previous_revenue_cents) return null;
     return Math.round(((finance.revenue_cents - finance.previous_revenue_cents) / finance.previous_revenue_cents) * 100);
+  });
+
+  protected readonly isMaster = this.auth.isMaster;
+  protected readonly canManageFinance = this.auth.canManageFinance;
+  protected readonly npsCategory = npsCategory;
+
+  /** Aviso do backup (só master): falhou, parou ou nunca rodou. */
+  protected readonly backupAlert = computed(() => {
+    const backup = this.data()?.backup;
+    if (!backup) return null;
+    if (!backup.configured) return 'Nenhum backup automático encontrado. Confira se o serviço "backup" do Docker está rodando.';
+    if (!backup.ok) return `O último backup automático falhou${backup.error ? `: ${backup.error}` : '.'}`;
+    if (backup.stale) return 'O backup automático está parado há mais de um dia.';
+    return null;
+  });
+
+  /** Faixa do NPS: excelente (75+), muito bom (50+), razoável (0+), crítico. */
+  protected readonly npsZone = computed(() => {
+    const nps = this.data()?.satisfaction.nps;
+    if (nps === null || nps === undefined) return null;
+    if (nps >= 75) return { label: 'Excelente', tone: 'success' };
+    if (nps >= 50) return { label: 'Muito bom', tone: 'success' };
+    if (nps >= 0) return { label: 'Razoável', tone: 'warning' };
+    return { label: 'Crítico', tone: 'danger' };
   });
 
   ngOnInit(): void {

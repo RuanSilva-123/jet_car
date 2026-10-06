@@ -80,3 +80,22 @@
     white-space: nowrap;
   }
 }
+
+// Lançar a compra no contas a pagar
+.bill-box {
+  display: grid;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-md);
+
+  &.is-on {
+    border-style: solid;
+    background: var(--color-hover);
+  }
+
+  .checkbox {
+    color: var(--color-text);
+    font-weight: 500;
+  }
+}

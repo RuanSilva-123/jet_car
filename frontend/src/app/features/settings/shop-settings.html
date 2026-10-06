@@ -89,14 +89,81 @@
     <section class="form-section">
       <header class="form-section__intro">
         <h2>Garantia</h2>
-        <p>Texto impresso no comprovante do serviço realizado.</p>
+        <p>Prazo usado para reconhecer retornos em garantia e texto impresso no comprovante.</p>
       </header>
 
       <div class="form-section__fields">
+        <div class="field days" [class.field--invalid]="errorFor('warranty_days')">
+          <label for="shop-warranty-days">Prazo de garantia dos serviços</label>
+          <div class="field__control">
+            <input id="shop-warranty-days" type="number" min="0" max="3650" formControlName="warranty_days" />
+            <span class="field__suffix">dias</span>
+          </div>
+          @if (errorFor('warranty_days'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
         <div class="field">
-          <label for="shop-warranty" class="sr-only">Texto da garantia</label>
+          <label for="shop-warranty">Texto da garantia <span class="optional">(opcional)</span></label>
           <div class="field__control field__control--textarea">
             <textarea id="shop-warranty" rows="3" formControlName="warranty_text"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Pix</h2>
+        <p>
+          Gera o QR Code e o Pix copia-e-cola no link do orçamento, no comprovante em PDF e na cobrança da OS. O valor cai direto na
+          sua conta, sem integração com banco.
+        </p>
+      </header>
+
+      <div class="form-section__fields">
+        @if (pixReady()) {
+          <div class="banner banner--success"><app-icon name="qr-code" [size]="16" /><span>Pix ativo: as cobranças já saem com QR Code.</span></div>
+        } @else {
+          <div class="banner"><app-icon name="qr-code" [size]="16" /><span>Informe a chave e a cidade para ativar o Pix.</span></div>
+        }
+
+        <div class="form-grid">
+          <div class="field" [class.field--invalid]="errorFor('pix_key_type')">
+            <label for="shop-pix-type">Tipo de chave</label>
+            <div class="field__control">
+              <select id="shop-pix-type" formControlName="pix_key_type">
+                <option value="">Sem Pix</option>
+                @for (type of pixKeyTypes(); track type.value) {
+                  <option [value]="type.value">{{ type.label }}</option>
+                }
+              </select>
+            </div>
+            @if (errorFor('pix_key_type'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('pix_key')">
+            <label for="shop-pix-key">Chave Pix</label>
+            <div class="field__control">
+              <app-icon name="key" />
+              <input id="shop-pix-key" formControlName="pix_key" [placeholder]="pixPlaceholder()" autocomplete="off" />
+            </div>
+            @if (errorFor('pix_key'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('pix_beneficiary')">
+            <label for="shop-pix-name">Nome do recebedor <span class="optional">(opcional)</span></label>
+            <div class="field__control"><input id="shop-pix-name" formControlName="pix_beneficiary" placeholder="Usa o nome da oficina" /></div>
+            <small class="field__hint">Aparece no app do banco do cliente (até 25 letras, sem acento).</small>
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('pix_city')">
+            <label for="shop-pix-city">Cidade</label>
+            <div class="field__control"><input id="shop-pix-city" formControlName="pix_city" placeholder="São Paulo" /></div>
+            @if (errorFor('pix_city'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
           </div>
         </div>
       </div>
@@ -112,4 +179,52 @@
       </button>
     </footer>
   </form>
+
+  <section class="card">
+    <header class="card__header card__header--row">
+      <div>
+        <h2>Backup automático</h2>
+        <p>Cópia diária do banco de dados e das fotos, feita pelo serviço "backup" do Docker.</p>
+      </div>
+      <app-icon name="database" />
+    </header>
+
+    <div class="backup">
+      @if (backupState(); as state) {
+        <div [class]="'banner banner--' + state.tone">
+          <app-icon [name]="state.tone === 'success' ? 'check' : 'alert'" [size]="16" />
+          <span>{{ state.text }}</span>
+        </div>
+      } @else {
+        <span class="spinner spinner--dark"></span>
+      }
+
+      @if (backup(); as status) {
+        @if (status.configured) {
+          <div class="backup__stats">
+            <div class="backup__stat">
+              <span>Último backup</span>
+              <strong>{{ status.finished_at ? (status.finished_at | date: "dd/MM/yyyy 'às' HH:mm") : '—' }}</strong>
+            </div>
+            <div class="backup__stat">
+              <span>Banco de dados</span>
+              <strong>{{ formatBytes(status.db_size) }}</strong>
+            </div>
+            <div class="backup__stat">
+              <span>Fotos e anexos</span>
+              <strong>{{ formatBytes(status.files_size) }}</strong>
+            </div>
+            <div class="backup__stat">
+              <span>Cópias guardadas</span>
+              <strong>{{ status.backups_count }}{{ status.keep_days ? ' · ' + status.keep_days + ' dias' : '' }}</strong>
+            </div>
+          </div>
+        }
+        <p>
+          Os arquivos ficam na pasta <code>backups</code> do projeto. Copie essa pasta para um HD externo ou para a nuvem de vez em
+          quando: um backup no mesmo computador não protege contra perda do disco.
+        </p>
+      }
+    </div>
+  </section>
 }

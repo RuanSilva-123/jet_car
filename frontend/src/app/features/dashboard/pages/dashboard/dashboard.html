@@ -32,6 +32,14 @@
 } @else {
   @let d = data()!;
 
+  @if (backupAlert(); as message) {
+    <div class="banner banner--danger">
+      <app-icon name="database" />
+      <span>{{ message }}</span>
+      <a routerLink="/settings/shop" class="btn btn--sm btn--ghost">Ver detalhes</a>
+    </div>
+  }
+
   <!-- Números do mês (financeiro) -->
   @if (d.finance; as finance) {
     <div class="kpis">
@@ -89,6 +97,82 @@
   </article>
 
   <div class="panels">
+    <!-- Satisfação (NPS) -->
+    <article class="card panel nps-panel">
+      <header class="panel__header">
+        <span class="panel__icon panel__icon--success"><app-icon name="smile" [size]="16" /></span>
+        <h2>Satisfação dos clientes</h2>
+        <span class="panel__count" title="Respostas nos últimos {{ d.satisfaction.days }} dias">{{ d.satisfaction.responses }}</span>
+      </header>
+      @if (d.satisfaction.nps !== null) {
+        <div class="nps">
+          <div class="nps__score tone-{{ npsZone()?.tone }}">
+            <strong>{{ d.satisfaction.nps }}</strong>
+            <span>NPS · {{ npsZone()?.label }}</span>
+          </div>
+          <div class="nps__detail">
+            <div class="nps__bar" [attr.aria-label]="d.satisfaction.promoters + ' promotores, ' + d.satisfaction.passives + ' neutros, ' + d.satisfaction.detractors + ' detratores'">
+              <span class="promoters" [style.flex-grow]="d.satisfaction.promoters"></span>
+              <span class="passives" [style.flex-grow]="d.satisfaction.passives"></span>
+              <span class="detractors" [style.flex-grow]="d.satisfaction.detractors"></span>
+            </div>
+            <small>
+              {{ d.satisfaction.promoters }} promotores · {{ d.satisfaction.passives }} neutros · {{ d.satisfaction.detractors }} detratores ·
+              média {{ d.satisfaction.average }}
+            </small>
+          </div>
+        </div>
+        @for (answer of d.satisfaction.recent; track answer.id) {
+          <a class="row" [routerLink]="['/service-orders', answer.id]">
+            <span class="score-chip score-chip--{{ npsCategory(answer.score) }}">{{ answer.score }}</span>
+            <span class="row__text">
+              <strong>{{ answer.customer }}</strong>
+              <small>{{ answer.comment ? '“' + answer.comment + '”' : 'OS #' + answer.number + ' · sem comentário' }}</small>
+            </span>
+          </a>
+        }
+      } @else {
+        <p class="panel__empty">Nenhuma avaliação nos últimos {{ d.satisfaction.days }} dias. Envie a pesquisa pelo WhatsApp na OS entregue.</p>
+      }
+      <p class="nps__foot">
+        @if (d.satisfaction.awaiting) {
+          <span>{{ d.satisfaction.awaiting }} {{ d.satisfaction.awaiting === 1 ? 'entrega recente sem avaliação' : 'entregas recentes sem avaliação' }}</span>
+        }
+        @if (d.warranty_returns_month) {
+          <span class="danger"><app-icon name="shield" [size]="12" /> {{ d.warranty_returns_month }} {{ d.warranty_returns_month === 1 ? 'retorno em garantia' : 'retornos em garantia' }} no mês</span>
+        }
+      </p>
+      @if (canManageFinance()) {
+        <a routerLink="/reports" [queryParams]="{ report: 'satisfaction' }" class="panel__more">Ver avaliações <app-icon name="arrow-right" [size]="12" /></a>
+      }
+    </article>
+
+    <!-- Contas a pagar -->
+    @if (d.finance; as finance) {
+      <a class="card panel panel--link" routerLink="/finance/bills" [class.is-alert]="finance.bills_overdue_count > 0">
+        <header class="panel__header">
+          <span class="panel__icon" [class.panel__icon--danger]="finance.bills_overdue_count > 0"><app-icon name="receipt" [size]="16" /></span>
+          <h2>Contas a pagar</h2>
+          <span class="panel__count">{{ finance.bills_overdue_count + finance.bills_due_soon_count }}</span>
+        </header>
+        <div class="payables">
+          <div [class.danger]="finance.bills_overdue_count > 0">
+            <span>Vencidas <small>{{ finance.bills_overdue_count }} conta(s)</small></span>
+            <strong>{{ finance.bills_overdue_cents | money }}</strong>
+          </div>
+          <div>
+            <span>Vencem em 7 dias <small>{{ finance.bills_due_soon_count }} conta(s)</small></span>
+            <strong>{{ finance.bills_due_soon_cents | money }}</strong>
+          </div>
+          <div class="payables__balance" [class.danger]="finance.cash_balance_cents < 0">
+            <span>Saldo em caixa <small>recebido − pago</small></span>
+            <strong>{{ finance.cash_balance_cents | money }}</strong>
+          </div>
+        </div>
+        <span class="panel__more">Abrir contas a pagar <app-icon name="arrow-right" [size]="12" /></span>
+      </a>
+    }
+
     <!-- Atrasadas -->
     <article class="card panel" [class.is-alert]="d.overdue.count > 0">
       <header class="panel__header">

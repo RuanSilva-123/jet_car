@@ -76,7 +76,11 @@
                     <small>{{ item.notes }}</small>
                   }
                 </span>
-                <span class="value">{{ item.price_cents === null ? 'a definir' : (item.price_cents | money) }}</span>
+                @if (item.warranty) {
+                  <span class="value value--warranty">Garantia</span>
+                } @else {
+                  <span class="value">{{ item.price_cents === null ? 'a definir' : (item.price_cents | money) }}</span>
+                }
               </li>
             }
           </ul>
@@ -105,8 +109,22 @@
             <div class="discount"><dt>Desconto</dt><dd>− {{ budget.order.discount_cents | money }}</dd></div>
           }
           <div class="grand"><dt>Total</dt><dd>{{ budget.order.total_cents | money }}</dd></div>
+          @if (budget.state === 'approved' && budget.order.paid_cents > 0) {
+            <div><dt>Já pago</dt><dd>− {{ budget.order.paid_cents | money }}</dd></div>
+            <div class="grand"><dt>Falta pagar</dt><dd>{{ budget.order.balance_cents | money }}</dd></div>
+          }
         </dl>
       </article>
+
+      @if (budget.pix; as pix) {
+        <article class="card block pay">
+          <h2><app-icon name="qr-code" [size]="18" /> Pague com Pix</h2>
+          <p>Aponte a câmera do app do banco para o QR Code ou copie o código. Depois é só mandar o comprovante para a oficina.</p>
+          <app-pix-charge [charge]="pix" />
+        </article>
+      } @else if (budget.state === 'approved' && budget.order.total_cents > 0 && budget.order.balance_cents === 0) {
+        <div class="banner banner--success"><app-icon name="check" /><span>Pagamento recebido. Obrigado!</span></div>
+      }
 
       @if (budget.state === 'awaiting') {
         <article class="card decide">

@@ -32,9 +32,43 @@ docker compose exec app php artisan migrate --seed
 
 Entre com o `MASTER_EMAIL` / `MASTER_PASSWORD` definidos em `backend/.env`.
 
+## Atualizando para esta versão
+
+Esta versão adicionou um pacote PHP (QR Code do Pix), um container de backup e tabelas novas. Depois do `git pull`:
+
+```bash
+docker compose up -d --build                    # sobe o novo container "backup"
+docker compose exec app composer install        # instala o pacote do QR Code
+docker compose exec app php artisan migrate
+```
+
+Depois, em **Dados da oficina**, preencha a chave Pix e a cidade (para o QR Code) e confira o prazo de garantia. Em **Fluxo de caixa**, o master informa o saldo inicial do caixa.
+
+## Backup
+
+O container `backup` faz uma cópia do banco e das fotos todo dia às 3h (e na primeira subida) na pasta `backups/` do projeto, guardando 14 dias. Ajuste no `.env` da raiz: `BACKUP_TIME`, `BACKUP_TZ`, `BACKUP_KEEP_DAYS`. A situação aparece em **Dados da oficina**.
+
+Copie a pasta `backups/` para um HD externo ou para a nuvem de vez em quando: backup no mesmo disco não protege contra perda do disco.
+
+```bash
+docker compose exec backup sh /scripts/backup.sh          # backup agora
+ls backups/db                                             # cópias do banco
+```
+
+Para restaurar um backup:
+
+```bash
+docker compose stop app queue scheduler
+docker compose exec backup sh /scripts/restore.sh jetcar_AAAA-MM-DD_HHMMSS.dump --confirmar
+docker compose start app queue scheduler
+docker compose exec app tar -xzf /backups/files/storage_AAAA-MM-DD_HHMMSS.tar.gz -C storage/app   # fotos (opcional)
+```
+
+O `restore.sh` faz antes um backup de segurança do estado atual (`…_antes-restore.dump`).
+
 ## Comandos do dia a dia
 
-Depois de atualizar o código, rode `docker compose up -d --build` (a imagem do PHP ganhou a extensão `gd`) e `docker compose exec app php artisan migrate`. O container `scheduler` gera todo dia, às 6h, a lista de lembretes de revisão (`php artisan jetcar:service-reminders`).
+Depois de atualizar o código, rode `docker compose up -d --build` (a imagem do PHP ganhou a extensão `gd`) e `docker compose exec app php artisan migrate`. O container `scheduler` gera todo dia, às 6h, a lista de lembretes de revisão (`php artisan jetcar:service-reminders`) e, às 5h30, as contas do mês das despesas fixas (`php artisan jetcar:recurring-bills`).
 
 ```bash
 docker compose up -d                            # sobe o ambiente

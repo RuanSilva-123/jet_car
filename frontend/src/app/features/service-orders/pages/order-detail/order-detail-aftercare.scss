@@ -1,0 +1,95 @@
+// Pós-venda da OS: cobrança Pix, garantia e pesquisa de satisfação
+
+.payment__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+
+  .btn {
+    flex: 1 1 auto;
+  }
+}
+
+.banner a {
+  color: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+}
+
+.warranty-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.warranty-card__state {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+
+  &.is-active {
+    color: var(--color-success);
+    font-weight: 600;
+  }
+}
+
+.survey {
+  &__score {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+
+    > span:last-child {
+      display: grid;
+      gap: 2px;
+    }
+
+    small {
+      color: var(--color-text-muted);
+      font-size: 12px;
+    }
+  }
+
+  &__comment {
+    margin: 4px 0 0;
+    padding: 10px 12px;
+    border-left: 3px solid var(--color-border);
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    background: var(--color-hover);
+    color: var(--color-text);
+    font-style: italic;
+    overflow-wrap: anywhere;
+  }
+}
+
+// Nota 0-10 com a cor da categoria NPS
+.score {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+
+  &--promoter {
+    background: var(--color-success-soft);
+    color: var(--color-success);
+  }
+
+  &--passive {
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  &--detractor {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+}

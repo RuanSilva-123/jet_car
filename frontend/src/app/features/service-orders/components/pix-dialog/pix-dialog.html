@@ -1,0 +1,66 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="pix-dialog-title">
+  <form (submit)="$event.preventDefault(); generate()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="qr-code" [size]="20" /></span>
+      <div>
+        <h2 id="pix-dialog-title">Cobrar com Pix</h2>
+        <p>OS #{{ order()?.number }} · {{ order()?.customer?.name }}</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      @if (notConfigured()) {
+        <div class="state">
+          <span class="dialog__icon"><app-icon name="key" [size]="20" /></span>
+          <strong>Cadastre a chave Pix da oficina</strong>
+          <p class="muted">O QR Code é gerado a partir da chave e da cidade informadas em Dados da oficina.</p>
+          @if (isMaster()) {
+            <a class="btn btn--primary btn--sm" routerLink="/settings/shop" (click)="closed.emit()">Abrir Dados da oficina</a>
+          } @else {
+            <p class="muted">Peça para o administrador cadastrar.</p>
+          }
+        </div>
+      } @else {
+        <div class="amount">
+          <div class="field">
+            <label for="pix-amount">Valor a cobrar</label>
+            <div class="field__control">
+              <span class="field__suffix">R$</span>
+              <input id="pix-amount" inputmode="numeric" [value]="amount()" (input)="onAmount($event)" />
+            </div>
+          </div>
+          @if (amountChanged()) {
+            <button type="submit" class="btn btn--ghost" [disabled]="loading()"><app-icon name="refresh" [size]="16" /> Gerar novo QR</button>
+          }
+        </div>
+        <small class="muted">Saldo em aberto: {{ balance() | money }}. Altere o valor para cobrar só uma parte (um sinal, por exemplo).</small>
+
+        @if (error(); as message) {
+          <div class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</div>
+        }
+
+        @if (loading() && !charge()) {
+          <div class="state"><span class="spinner spinner--dark"></span></div>
+        } @else if (charge(); as pix) {
+          <app-pix-charge [charge]="pix" />
+          <small class="muted">
+            O Pix cai direto na conta da oficina. Confira no app do banco e depois registre o pagamento para dar baixa na OS.
+          </small>
+        }
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()">Fechar</button>
+      @if (charge()) {
+        @if (whatsappLink(); as link) {
+          <a class="btn btn--ghost" [href]="link" target="_blank" rel="noopener"><app-icon name="whatsapp" [size]="16" /> Enviar pelo WhatsApp</a>
+        }
+        <button type="button" class="btn btn--primary" (click)="registerPayment.emit()"><app-icon name="check" [size]="16" /> Registrar pagamento</button>
+      }
+    </footer>
+  </form>
+</dialog>

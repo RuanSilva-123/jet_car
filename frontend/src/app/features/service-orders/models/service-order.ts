@@ -23,6 +23,8 @@ export interface ServiceOrderItem {
   /** Mecânico responsável. */
   mechanic_id: number | null;
   mechanic: string | null;
+  /** Retorno em garantia: serviço original que está sendo refeito (sem custo). */
+  warranty_of_item_id?: number | null;
 }
 
 export interface ServiceOrderPart {
@@ -58,7 +60,11 @@ export interface ServiceOrderEvent {
     | 'payment_added'
     | 'payment_removed'
     | 'inspection'
-    | 'inspection_signed';
+    | 'inspection_signed'
+    | 'warranty_linked'
+    | 'warranty_return'
+    | 'warranty_unlinked'
+    | 'survey_answered';
   description: string;
   from_status: ServiceOrderStatus | null;
   to_status: ServiceOrderStatus | null;
@@ -144,6 +150,19 @@ export interface ServiceOrder {
   public_budget_url?: string | null;
   payments?: ServiceOrderPayment[];
   inspection?: { exists: boolean; updated_at: string | null };
+  /** Retorno em garantia: OS original. */
+  warranty_of_id: number | null;
+  warranty_of?: { id: number; number: string; delivered_at: string | null; warranty_until: string | null } | null;
+  /** OS que voltaram em garantia por causa desta. */
+  warranty_returns?: { id: number; number: string; status_label: string; created_at: string }[];
+  /** Detalhe: até quando vale a garantia desta OS (só entregue). */
+  warranty_until?: string | null;
+  /** Pesquisa de satisfação (0 a 10) respondida pelo cliente. */
+  survey_score: number | null;
+  survey_comment: string | null;
+  survey_answered_at: string | null;
+  /** Detalhe: link da pesquisa (entregue e ainda sem resposta). */
+  survey_url?: string | null;
   /** Detalhe: serviços/peças ainda sem valor. */
   unpriced_count?: number;
   customer?: ServiceOrderCustomer;
@@ -264,4 +283,18 @@ export function flowStep(order: FlowFields): number | null {
     case 'canceled':
       return null;
   }
+}
+
+/** OS entregue do mesmo veículo ainda na garantia (candidata ao vínculo de retorno). */
+export interface WarrantyCandidate {
+  id: number;
+  number: string;
+  delivered_at: string | null;
+  warranty_until: string | null;
+  items: { id: number; name: string }[];
+}
+
+/** Classificação NPS da nota (0-6 detrator, 7-8 neutro, 9-10 promotor). */
+export function npsCategory(score: number): 'promoter' | 'passive' | 'detractor' {
+  return score >= 9 ? 'promoter' : score >= 7 ? 'passive' : 'detractor';
 }

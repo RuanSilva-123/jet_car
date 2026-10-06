@@ -116,6 +116,7 @@ class PublicBudgetController extends Controller
                     'name' => $item->name,
                     'notes' => $item->notes,
                     'price_cents' => $item->price_cents,
+                    'warranty' => $item->warranty_of_item_id !== null,
                 ]),
                 'parts' => $order->parts->map(fn ($part) => [
                     'name' => $part->name,

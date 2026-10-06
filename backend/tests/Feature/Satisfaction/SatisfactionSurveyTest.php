@@ -8,6 +8,7 @@ use App\Models\ServiceOrder;
 use App\Models\User;
 use App\Support\BudgetLink;
 use App\Support\Nps;
+use App\Support\ShopSettings;
 use App\Support\SurveyLink;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -62,8 +63,14 @@ class SatisfactionSurveyTest extends TestCase
     public function test_customer_answers_once(): void
     {
         $order = $this->delivered();
+        ShopSettings::save(['phone' => '1133334444']);
 
-        $this->getJson($this->path($order))->assertOk()->assertJsonPath('data.state', 'open')->assertJsonMissingPath('data.order.customer.phone');
+        // Telefone da oficina (para o cliente insatisfeito falar com ela), nunca o do cliente
+        $this->getJson($this->path($order))
+            ->assertOk()
+            ->assertJsonPath('data.state', 'open')
+            ->assertJsonPath('data.shop.phone', '1133334444')
+            ->assertJsonMissingPath('data.order.customer.phone');
 
         $this->postJson($this->path($order), ['score' => 9, 'comment' => 'Atendimento ótimo'])
             ->assertOk()

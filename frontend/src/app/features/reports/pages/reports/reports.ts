@@ -1,20 +1,32 @@
 import { DecimalPipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { catchError, debounceTime, distinctUntilChanged, of, switchMap, tap } from 'rxjs';
 
 import { BarChart, BarDatum } from '../../../../shared/components/bar-chart/bar-chart';
-import { Icon } from '../../../../shared/components/icon/icon';
+import { Icon, IconName } from '../../../../shared/components/icon/icon';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { formatMoney, formatPhone } from '../../../../shared/utils/br-format';
 import { localDate, presetRange } from '../../../finance/dates';
 import { ColumnType, ReportKey, ReportQuery, ReportResult, ReportsService } from '../../reports.service';
 
-const TABS: { key: ReportKey; label: string; icon: 'trending-up' | 'wrench' | 'users' | 'user'; description: string }[] = [
+const TABS: { key: ReportKey; label: string; icon: IconName; description: string }[] = [
   { key: 'revenue', label: 'Faturamento', icon: 'trending-up', description: 'OS entregues no período, por dia ou mês, com ticket médio e o que foi recebido.' },
   { key: 'services', label: 'Serviços mais vendidos', icon: 'wrench', description: 'Serviços feitos nas OS entregues, do mais vendido ao menos vendido.' },
   { key: 'customers', label: 'Clientes que voltam', icon: 'users', description: 'Clientes atendidos no período e quem já tinha vindo antes.' },
   { key: 'mechanics', label: 'Produção', icon: 'user', description: 'Serviços concluídos por mecânico no período.' },
+  {
+    key: 'warranty',
+    label: 'Retornos em garantia',
+    icon: 'shield',
+    description: 'Serviços que voltaram na garantia no período, quantas vezes e quem tinha feito o serviço original.',
+  },
+  {
+    key: 'satisfaction',
+    label: 'Satisfação',
+    icon: 'star',
+    description: 'Avaliações dos clientes (0 a 10) respondidas no período, das piores notas para as melhores.',
+  },
 ];
 
 /** Relatórios gerenciais com exportação em CSV (abre no Excel). */
@@ -25,8 +37,11 @@ const TABS: { key: ReportKey; label: string; icon: 'trending-up' | 'wrench' | 'u
   styleUrls: ['../../../services/pages/service-list/service-list.scss', '../../../finance/pages/finance/finance.scss', './reports.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class ReportsPage {
+export class ReportsPage implements OnInit {
   private readonly reports = inject(ReportsService);
+
+  /** ?report=satisfaction (link do painel). */
+  readonly reportParam = input<string | undefined>(undefined, { alias: 'report' });
 
   protected readonly tabs = TABS;
   protected readonly report = signal<ReportKey>('revenue');
@@ -106,6 +121,11 @@ export class ReportsPage {
         this.failed.set(result === null);
         if (result) this.result.set(result);
       });
+  }
+
+  ngOnInit(): void {
+    const key = TABS.find((tab) => tab.key === this.reportParam())?.key;
+    if (key) this.report.set(key);
   }
 
   protected selectReport(key: ReportKey): void {

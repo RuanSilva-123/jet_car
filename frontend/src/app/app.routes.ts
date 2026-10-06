@@ -23,6 +23,13 @@ export const routes: Routes = [
     loadComponent: () => import('./features/public-budget/public-budget').then((m) => m.PublicBudgetPage),
   },
 
+  // Pesquisa de satisfação (link enviado depois da entrega)
+  {
+    path: 'avaliacao/:token',
+    title: 'Avaliação do atendimento',
+    loadComponent: () => import('./features/public-survey/public-survey').then((m) => m.PublicSurveyPage),
+  },
+
   // Todo o restante exige sessão válida
   {
     path: '',

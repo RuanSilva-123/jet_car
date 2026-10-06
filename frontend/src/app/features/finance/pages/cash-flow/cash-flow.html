@@ -1,0 +1,197 @@
+<section class="page-header">
+  <div>
+    <h1>Fluxo de caixa</h1>
+    <p>O que entrou, o que saiu e quanto deve sobrar no fim do mês com as contas que ainda vão vencer.</p>
+  </div>
+  <div class="header-actions">
+    @if (isMaster()) {
+      <button type="button" class="btn btn--ghost" (click)="openingOpen.set(true)"><app-icon name="wallet" [size]="16" /> Saldo inicial</button>
+    }
+    <a class="btn btn--ghost" [href]="csvUrl()" download><app-icon name="download" [size]="16" /> CSV</a>
+    <a class="btn btn--primary" routerLink="/finance/bills"><app-icon name="receipt" [size]="16" /> Contas a pagar</a>
+  </div>
+</section>
+
+<div class="month-nav">
+  <button type="button" class="btn btn--icon" (click)="go(-1)" aria-label="Mês anterior"><app-icon name="chevron-left" /></button>
+  <strong>{{ label() }}</strong>
+  <button type="button" class="btn btn--icon" (click)="go(1)" aria-label="Próximo mês"><app-icon name="chevron-right" /></button>
+  @if (!isCurrent()) {
+    <button type="button" class="link-button" (click)="goToday()">Voltar para o mês atual</button>
+  }
+  @if (loading() && data()) {
+    <span class="spinner spinner--dark"></span>
+  }
+</div>
+
+@if (loading() && !data()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else if (failed() && !data()) {
+  <div class="card empty-state">
+    <span class="empty-state__icon"><app-icon name="alert" /></span>
+    <strong>Não foi possível carregar o fluxo de caixa</strong>
+  </div>
+} @else if (data(); as flow) {
+  @if (!flow.settings.opening_date) {
+    <div class="banner banner--info">
+      <app-icon name="wallet" />
+      <span>
+        O saldo parte de R$ 0,00. Informe quanto havia no caixa e no banco numa data para o saldo bater com a realidade.
+      </span>
+      @if (isMaster()) {
+        <button type="button" class="btn btn--sm btn--primary" (click)="openingOpen.set(true)">Informar saldo inicial</button>
+      }
+    </div>
+  }
+
+  <div class="tiles">
+    <div class="tile">
+      <span class="tile__label">{{ isFuture() ? 'Saldo no início' : isCurrent() ? 'Saldo hoje' : 'Saldo no fim do mês' }}</span>
+      <strong class="tile__value" [class.is-alert]="flow.summary.current_balance_cents < 0">{{ flow.summary.current_balance_cents | money }}</strong>
+      <small>Começou o mês com {{ flow.opening_balance_cents | money }}</small>
+    </div>
+    <div class="tile">
+      <span class="tile__label">Entradas</span>
+      <strong class="tile__value is-in">{{ flow.summary.received_cents | money }}</strong>
+      <small>Pagamentos das OS no mês</small>
+    </div>
+    <div class="tile">
+      <span class="tile__label">Saídas</span>
+      <strong class="tile__value">{{ flow.summary.paid_cents | money }}</strong>
+      <small>Resultado: <span [class.negative]="flow.summary.net_cents < 0">{{ flow.summary.net_cents | money }}</span></small>
+    </div>
+    <a class="tile" routerLink="/finance/bills">
+      <span class="tile__label">A pagar no mês</span>
+      <strong class="tile__value">{{ flow.summary.to_pay_cents | money }}</strong>
+      @if (flow.summary.overdue_count > 0) {
+        <small class="negative">{{ flow.summary.overdue_count }} vencida(s): {{ flow.summary.overdue_cents | money }}</small>
+      } @else {
+        <small>{{ flow.summary.to_pay_count }} conta(s) em aberto</small>
+      }
+    </a>
+    <div class="tile tile--highlight">
+      <span class="tile__label">Previsão para o fim do mês</span>
+      <strong class="tile__value" [class.is-alert]="flow.summary.projected_end_cents < 0">{{ flow.summary.projected_end_cents | money }}</strong>
+      @if (flow.summary.receivable_cents > 0) {
+        <small>{{ flow.summary.projected_with_receivables_cents | money }} recebendo as OS em aberto ({{ flow.summary.receivable_cents | money }})</small>
+      } @else {
+        <small>Pagando todas as contas do mês</small>
+      }
+    </div>
+  </div>
+
+  @if (flow.summary.projected_end_cents < 0 && isCurrent()) {
+    <div class="banner banner--danger">
+      <app-icon name="alert" />
+      <span>
+        Pelas contas a vencer, o caixa fica negativo antes do fim do mês. Cobre as OS em aberto ou renegocie vencimentos.
+      </span>
+      <a class="btn btn--sm btn--ghost" routerLink="/finance">Ver contas a receber</a>
+    </div>
+  }
+
+  <article class="card chart-card">
+    <header class="card__header card__header--row">
+      <div>
+        <h2>Saldo dia a dia</h2>
+        <p>Linha contínua: realizado. Tracejada: previsão com as contas a vencer.</p>
+      </div>
+    </header>
+    <div class="chart-card__body">
+      <app-line-chart [data]="points()" [formatTick]="formatTick" ariaLabel="Saldo do caixa por dia" />
+    </div>
+  </article>
+
+  <div class="columns">
+    <article class="card">
+      <header class="card__header card__header--row">
+        <div>
+          <h2>Movimento por dia</h2>
+          <p>{{ allDays() ? 'Todos os dias do mês' : 'Só os dias com entrada, saída ou conta a vencer' }}</p>
+        </div>
+        <label class="checkbox">
+          <input type="checkbox" [checked]="allDays()" (change)="allDays.set($any($event.target).checked)" />
+          <span>Todos os dias</span>
+        </label>
+      </header>
+      @if (rows().length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="calendar" /></span>
+          <strong>Nenhum movimento neste mês</strong>
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table days">
+            <thead>
+              <tr>
+                <th>Dia</th>
+                <th class="right">Entradas</th>
+                <th class="right">Saídas</th>
+                <th class="right">Saldo</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (day of rows(); track day.date) {
+                <tr [class.is-projected]="day.projected">
+                  <td>
+                    {{ day.date + 'T12:00:00' | date: 'EEE, dd/MM' }}
+                    @if (day.projected) {
+                      <small class="tag">previsto</small>
+                    }
+                  </td>
+                  <td class="right in">{{ day.in_cents ? (day.in_cents | money) : '—' }}</td>
+                  <td class="right">
+                    @if (day.out_cents) {
+                      {{ day.out_cents | money }}
+                    }
+                    @if (day.planned_out_cents) {
+                      <small class="planned">{{ day.planned_out_cents | money }} a pagar</small>
+                    }
+                    @if (!day.out_cents && !day.planned_out_cents) {
+                      —
+                    }
+                  </td>
+                  <td class="right strong" [class.negative]="day.balance_cents < 0">{{ day.balance_cents | money }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </article>
+
+    <article class="card categories">
+      <header class="card__header">
+        <h2>Saídas por categoria</h2>
+        <p>Pago e a pagar no mês</p>
+      </header>
+      @if (flow.by_category.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="receipt" /></span>
+          <strong>Nenhuma conta neste mês</strong>
+        </div>
+      } @else {
+        <ul class="categories__list">
+          @for (row of flow.by_category; track row.category) {
+            <li>
+              <div class="categories__head">
+                <span>{{ row.label }}</span>
+                <strong>{{ row.paid_cents + row.open_cents | money }}</strong>
+              </div>
+              <div class="categories__bar" [attr.aria-label]="'Pago ' + (row.paid_cents | money) + ', a pagar ' + (row.open_cents | money)">
+                <span class="paid" [style.width.%]="(row.paid_cents / categoryMax()) * 100"></span>
+                <span class="open" [style.width.%]="(row.open_cents / categoryMax()) * 100"></span>
+              </div>
+              @if (row.open_cents) {
+                <small>{{ row.open_cents | money }} a pagar</small>
+              }
+            </li>
+          }
+        </ul>
+        <div class="legend"><span class="legend__paid"></span> Pago <span class="legend__open"></span> A pagar</div>
+      }
+    </article>
+  </div>
+
+  <app-opening-balance-dialog [open]="openingOpen()" [settings]="flow.settings" (saved)="onOpeningSaved($event)" (closed)="openingOpen.set(false)" />
+}

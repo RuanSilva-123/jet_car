@@ -72,6 +72,23 @@
           <div class="kpi"><span>Mecânicos com produção</span><strong>{{ data.summary['mechanics'] | number }}</strong></div>
           <div class="kpi"><span>Serviços feitos</span><strong>{{ total('services') | number }}</strong></div>
         }
+        @case ('warranty') {
+          <div class="kpi"><span>OS de retorno</span><strong>{{ data.summary['returns'] | number }}</strong></div>
+          <div class="kpi"><span>OS entregues</span><strong>{{ data.summary['delivered'] | number }}</strong></div>
+          <div class="kpi"><span>Taxa de retorno</span><strong>{{ data.summary['return_rate'] | number: '1.0-1' }}%</strong></div>
+        }
+        @case ('satisfaction') {
+          <div class="kpi">
+            <span>NPS</span>
+            <strong [class.nps-bad]="(data.summary['nps'] ?? 0) < 0">{{ data.summary['nps'] ?? '—' }}</strong>
+          </div>
+          <div class="kpi"><span>Nota média</span><strong>{{ data.summary['average'] !== null ? (data.summary['average'] | number: '1.1-1') : '—' }}</strong></div>
+          <div class="kpi"><span>Respostas</span><strong>{{ data.summary['responses'] | number }}</strong></div>
+          <div class="kpi">
+            <span>Promotores · neutros · detratores</span>
+            <strong>{{ data.summary['promoters'] }} · {{ data.summary['passives'] }} · {{ data.summary['detractors'] }}</strong>
+          </div>
+        }
       }
     </div>
 
@@ -87,7 +104,13 @@
         <div class="empty-state">
           <span class="empty-state__icon"><app-icon name="bar-chart" /></span>
           <strong>Sem dados no período</strong>
-          <p>Escolha outro período. O faturamento conta as OS entregues.</p>
+          <p>
+            @switch (data.report) {
+              @case ('warranty') { Nenhum retorno em garantia no período. Ótimo sinal! }
+              @case ('satisfaction') { Nenhuma avaliação respondida no período. Peça pelo WhatsApp na OS entregue. }
+              @default { Escolha outro período. O faturamento conta as OS entregues. }
+            }
+          </p>
         </div>
       } @else {
         <div class="table-scroll">
@@ -103,7 +126,11 @@
               @for (row of data.rows; track $index) {
                 <tr>
                   @for (column of data.columns; track column.key) {
-                    <td [class.right]="isNumeric(column.type)" [class.first]="$first">{{ cell(row[column.key], column.type) }}</td>
+                    @if (data.report === 'satisfaction' && column.key === 'score') {
+                      <td class="right"><span class="score score--{{ row['category'] }}">{{ row['score'] }}</span></td>
+                    } @else {
+                      <td [class.right]="isNumeric(column.type)" [class.first]="$first" [class.wrap]="column.key === 'comment'">{{ cell(row[column.key], column.type) }}</td>
+                    }
                   }
                 </tr>
               }

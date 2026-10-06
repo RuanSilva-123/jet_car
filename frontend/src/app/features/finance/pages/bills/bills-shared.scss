@@ -1,0 +1,66 @@
+// Listas de Contas a pagar / Despesas fixas / Fornecedores
+
+.list {
+  overflow: hidden;
+
+  &__body {
+    transition: opacity 0.15s;
+
+    &.is-loading {
+      opacity: 0.55;
+      pointer-events: none;
+    }
+  }
+
+  &__state {
+    display: grid;
+    place-items: center;
+    padding: 72px 0;
+  }
+}
+
+.toolbar__text {
+  flex: 1 1 320px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+
+  strong {
+    color: var(--color-text);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.data-table {
+  .right {
+    text-align: right;
+  }
+
+  .strong {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .actions {
+    width: 1%;
+    white-space: nowrap;
+    text-align: right;
+  }
+
+  tr.is-inactive td {
+    opacity: 0.6;
+  }
+}
+
+.cell-text {
+  display: grid;
+  line-height: 1.35;
+
+  small {
+    color: var(--color-text-muted);
+    font-size: 12px;
+  }
+}
+
+.muted {
+  color: var(--color-text-muted);
+}

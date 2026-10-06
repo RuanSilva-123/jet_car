@@ -92,8 +92,10 @@ export function formatMileage(value: string | number | null | undefined): string
 // --- Dinheiro (a API trabalha em centavos inteiros) ---------------------------------
 
 /** 123456 → "R$ 1.234,56" */
+/** R$ 1.234,56 · negativo (saldo do caixa) sai como −R$ 1.234,56. */
 export function formatMoney(cents: number | null | undefined): string {
-  return `R$ ${centsToInput(cents ?? 0)}`;
+  const value = Math.round(cents ?? 0);
+  return `${value < 0 ? '−' : ''}R$ ${centsToInput(Math.abs(value))}`;
 }
 
 /** 123456 → "1.234,56" (texto do campo) */
@@ -163,4 +165,24 @@ export function formatBr(value: string | number | null | undefined, format: BrFo
     case 'quantity':
       return maskQuantity(text);
   }
+}
+
+/** Tamanho de arquivo legível: 1,4 MB. */
+export function formatBytes(bytes: number | null | undefined): string {
+  let value = Math.max(0, bytes ?? 0);
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let unit = 0;
+  while (value >= 1024 && unit < units.length - 1) {
+    value /= 1024;
+    unit++;
+  }
+  return `${value.toLocaleString('pt-BR', { maximumFractionDigits: unit === 0 ? 0 : 1 })} ${units[unit]}`;
+}
+
+/** Chave Pix como a pessoa reconhece: CPF/CNPJ com pontuação, celular sem o +55. */
+export function formatPixKey(type: string | null | undefined, key: string | null | undefined): string {
+  if (!key) return '';
+  if (type === 'cpf' || type === 'cnpj') return formatDocument(key);
+  if (type === 'phone') return formatPhone(key.replace(/^\+55/, ''));
+  return key;
 }

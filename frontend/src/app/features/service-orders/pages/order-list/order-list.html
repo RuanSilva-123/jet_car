@@ -87,6 +87,9 @@
                 <tr class="is-clickable" (click)="open(order)">
                   <td>
                     <a class="number" [routerLink]="[order.id]" (click)="$event.stopPropagation()">#{{ order.number }}</a>
+                    @if (order.warranty_of_id) {
+                      <span class="warranty" title="Retorno em garantia"><app-icon name="shield" [size]="12" /> Garantia</span>
+                    }
                   </td>
                   <td>
                     <span class="strong">{{ order.customer?.name }}</span>

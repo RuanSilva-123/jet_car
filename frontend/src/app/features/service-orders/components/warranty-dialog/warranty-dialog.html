@@ -1,0 +1,78 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="warranty-dialog-title">
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="shield" [size]="20" /></span>
+      <div>
+        <h2 id="warranty-dialog-title">Retorno em garantia</h2>
+        <p>O carro voltou por um serviço que ainda está na garantia? Escolha a OS original e o que está sendo refeito.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      @if (loading()) {
+        <div class="state"><span class="spinner spinner--dark"></span></div>
+      } @else if (candidates().length === 0) {
+        <div class="state">
+          <span class="dialog__icon"><app-icon name="shield" [size]="20" /></span>
+          <strong>Nenhuma OS na garantia</strong>
+          <p class="muted">
+            @if (warrantyDays() > 0) {
+              Este veículo não tem OS entregue nos últimos {{ warrantyDays() }} dias com serviços.
+            } @else {
+              O prazo de garantia está zerado em Dados da oficina.
+            }
+          </p>
+        </div>
+      } @else {
+        <div class="orders" role="radiogroup" aria-label="OS original">
+          @for (candidate of candidates(); track candidate.id) {
+            <div class="order" [class.is-selected]="selectedOrder() === candidate.id" (click)="chooseOrder(candidate)">
+              <label class="order__head">
+                <input type="radio" name="warranty-order" [checked]="selectedOrder() === candidate.id" (change)="chooseOrder(candidate)" />
+                <strong>OS #{{ candidate.number }}</strong>
+                <span>
+                  entregue em {{ candidate.delivered_at | date: 'dd/MM/yyyy' }}
+                  @if (candidate.warranty_until) {
+                    · garantia até {{ candidate.warranty_until + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+                  }
+                </span>
+              </label>
+              <div class="order__items">
+                @for (item of candidate.items; track item.id) {
+                  <label class="checkbox" (click)="$event.stopPropagation()">
+                    <input
+                      type="checkbox"
+                      [checked]="selectedOrder() === candidate.id && selectedItems().has(item.id)"
+                      (change)="toggleItem(candidate, item.id)"
+                    />
+                    <span>{{ item.name }}</span>
+                  </label>
+                }
+              </div>
+            </div>
+          }
+        </div>
+        <small class="muted">Os serviços marcados entram nesta OS sem custo, identificados como “Garantia”.</small>
+      }
+
+      @if (error(); as message) {
+        <div class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</div>
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="!canSave()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="shield" [size]="16" />
+        }
+        Marcar retorno
+      </button>
+    </footer>
+  </form>
+</dialog>

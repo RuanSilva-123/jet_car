@@ -226,3 +226,20 @@
   color: var(--color-text-muted);
   font-size: 12px;
 }
+
+.lines .value--warranty {
+  color: var(--color-success);
+  font-weight: 600;
+}
+
+.pay {
+  h2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  > p {
+    margin-bottom: 14px;
+  }
+}

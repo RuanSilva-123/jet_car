@@ -1,0 +1,157 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="bill-dialog-title">
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="receipt" [size]="20" /></span>
+      <div>
+        <h2 id="bill-dialog-title">{{ editing() ? 'Editar conta' : 'Nova conta a pagar' }}</h2>
+        <p>{{ editing() ? bill()?.description : 'Boleto, nota de fornecedor, imposto, conta de consumo...' }}</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      @if (paid()) {
+        <div class="dialog__summary">
+          <span>Paga em {{ bill()!.paid_at }} ({{ bill()!.payment_method_label }}). Valor e vencimento não mudam.</span>
+        </div>
+      }
+
+      <div class="field" [class.field--invalid]="errors().description">
+        <label for="bill-description">Descrição</label>
+        <div class="field__control">
+          <input id="bill-description" maxlength="150" placeholder="Ex.: Nota 1234 - Auto Peças Silva" [value]="description()" (input)="description.set($any($event.target).value)" />
+        </div>
+        @if (errors().description; as message) {
+          <small class="field__error">{{ message }}</small>
+        }
+      </div>
+
+      <div class="dialog__grid">
+        <div class="field" [class.field--invalid]="errors().category">
+          <label for="bill-category">Categoria</label>
+          <div class="field__control">
+            <select id="bill-category" (change)="category.set($any($event.target).value)">
+              @for (option of categories; track option.value) {
+                <option [value]="option.value" [selected]="option.value === category()">{{ option.label }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field" [class.field--invalid]="errors().supplier_id">
+          <label for="bill-supplier">Fornecedor <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <select id="bill-supplier" (change)="supplierId.set($any($event.target).value ? +$any($event.target).value : null)">
+              <option value="" [selected]="supplierId() === null">Sem fornecedor</option>
+              @for (supplier of suppliers(); track supplier.id) {
+                <option [value]="supplier.id" [selected]="supplier.id === supplierId()">{{ supplier.name }}</option>
+              }
+            </select>
+          </div>
+          @if (errors().supplier_id; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().amount_cents">
+          <label for="bill-amount">{{ installments() > 1 ? 'Valor total' : 'Valor' }}</label>
+          <div class="field__control">
+            <span class="field__suffix">R$</span>
+            <input id="bill-amount" inputmode="numeric" [value]="amount()" (input)="onAmount($event)" [disabled]="paid()" />
+          </div>
+          @if (errors().amount_cents; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().due_date">
+          <label for="bill-due">{{ installments() > 1 ? '1º vencimento' : 'Vencimento' }}</label>
+          <div class="field__control">
+            <input id="bill-due" type="date" [value]="dueDate()" (input)="dueDate.set($any($event.target).value)" [disabled]="paid()" />
+          </div>
+          @if (errors().due_date; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+      </div>
+
+      @if (!editing()) {
+        <div class="dialog__grid">
+          <div class="field" [class.field--invalid]="errors().installments">
+            <label for="bill-installments">Parcelas</label>
+            <div class="field__control">
+              <input id="bill-installments" type="number" min="1" max="48" [value]="installments()" (input)="onInstallments($any($event.target).value)" />
+              <span class="field__suffix">x</span>
+            </div>
+            @if (errors().installments; as message) {
+              <small class="field__error">{{ message }}</small>
+            } @else if (installments() > 1 && amountCents() > 0) {
+              <small class="muted">{{ installments() }} contas de ~{{ installmentCents() | money }}, uma por mês.</small>
+            }
+          </div>
+          <div class="field">
+            <span class="field__label">&nbsp;</span>
+            <label class="checkbox paid-now">
+              <input type="checkbox" [checked]="alreadyPaid()" [disabled]="installments() > 1" (change)="alreadyPaid.set($any($event.target).checked)" />
+              <span>Já está paga</span>
+            </label>
+          </div>
+        </div>
+
+        @if (alreadyPaid()) {
+          <div class="dialog__grid">
+            <div class="field" [class.field--invalid]="errors().paid_at">
+              <label for="bill-paid-at">Pago em</label>
+              <div class="field__control">
+                <input id="bill-paid-at" type="date" [max]="today" [value]="paidAt()" (input)="paidAt.set($any($event.target).value)" />
+              </div>
+              @if (errors().paid_at; as message) {
+                <small class="field__error">{{ message }}</small>
+              }
+            </div>
+            <div class="field" [class.field--invalid]="errors().payment_method">
+              <label for="bill-method">Forma de pagamento</label>
+              <div class="field__control">
+                <select id="bill-method" (change)="paymentMethod.set($any($event.target).value)">
+                  @for (option of methods; track option.value) {
+                    <option [value]="option.value" [selected]="option.value === paymentMethod()">{{ option.label }}</option>
+                  }
+                </select>
+              </div>
+            </div>
+          </div>
+        }
+      }
+
+      <div class="dialog__grid">
+        <div class="field" [class.field--invalid]="errors().document_number">
+          <label for="bill-doc">Nº do documento <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="bill-doc" maxlength="60" placeholder="Nota fiscal, boleto..." [value]="documentNumber()" (input)="documentNumber.set($any($event.target).value)" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="bill-notes">Observações <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="bill-notes" maxlength="1000" [value]="notes()" (input)="notes.set($any($event.target).value)" />
+          </div>
+        </div>
+      </div>
+
+      @if (error(); as message) {
+        <div class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</div>
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        {{ editing() ? 'Salvar' : installments() > 1 ? 'Lançar ' + installments() + ' parcelas' : 'Lançar conta' }}
+      </button>
+    </footer>
+  </form>
+</dialog>

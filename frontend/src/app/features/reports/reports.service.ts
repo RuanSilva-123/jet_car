@@ -4,7 +4,7 @@ import { map, Observable } from 'rxjs';
 
 import { API_URL, ApiResource } from '../../core/http/api';
 
-export type ReportKey = 'revenue' | 'services' | 'customers' | 'mechanics';
+export type ReportKey = 'revenue' | 'services' | 'customers' | 'mechanics' | 'warranty' | 'satisfaction';
 export type ColumnType = 'text' | 'int' | 'money' | 'percent' | 'date' | 'month' | 'bool' | 'phone';
 
 export interface ReportResult {
@@ -15,7 +15,7 @@ export interface ReportResult {
   columns: { key: string; label: string; type: ColumnType }[];
   rows: Record<string, string | number | boolean | null>[];
   totals: Record<string, string | number | boolean | null> | null;
-  summary: Record<string, number>;
+  summary: Record<string, number | null>;
 }
 
 export interface ReportQuery {

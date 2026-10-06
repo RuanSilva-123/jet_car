@@ -1,0 +1,173 @@
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar fornecedor</span>
+      <input type="search" placeholder="Nome, contato, CNPJ ou telefone" (input)="onSearch($any($event.target).value)" />
+    </label>
+    <button type="button" class="btn btn--primary btn--sm" (click)="create()"><app-icon name="plus" [size]="16" /> Novo fornecedor</button>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && page()">
+    @if (loading() && !page()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (page(); as result) {
+      @if (result.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="truck" /></span>
+          <strong>{{ search() ? 'Nenhum fornecedor encontrado' : 'Nenhum fornecedor cadastrado' }}</strong>
+          <p>Cadastre as autopeças, distribuidoras e prestadores para saber quanto deve a cada um.</p>
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Fornecedor</th>
+                <th>Contato</th>
+                <th class="right">Em aberto</th>
+                <th class="actions"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (supplier of result.data; track supplier.id) {
+                <tr>
+                  <td>
+                    <span class="cell-text">
+                      <strong>{{ supplier.name }}</strong>
+                      @if (supplier.document) {
+                        <small>{{ supplier.document | brFormat: 'document' }}</small>
+                      }
+                    </span>
+                  </td>
+                  <td>
+                    <span class="cell-text">
+                      <span>{{ supplier.contact_name || '—' }}</span>
+                      @if (supplier.phone || supplier.email) {
+                        <small>{{ supplier.phone ? (supplier.phone | brFormat: 'phone') : '' }}{{ supplier.phone && supplier.email ? ' · ' : '' }}{{ supplier.email }}</small>
+                      }
+                    </span>
+                  </td>
+                  <td class="right">
+                    @if (supplier.open_bills_count) {
+                      <button type="button" class="link-button" (click)="showBills.emit(supplier)" title="Ver contas em aberto">
+                        {{ supplier.open_bills_cents | money }} ({{ supplier.open_bills_count }})
+                      </button>
+                    } @else {
+                      <span class="muted">—</span>
+                    }
+                  </td>
+                  <td class="actions">
+                    <button type="button" class="btn btn--icon" (click)="edit(supplier)" [attr.aria-label]="'Editar ' + supplier.name" title="Editar">
+                      <app-icon name="pencil" [size]="16" />
+                    </button>
+                    @if (isMaster()) {
+                      <button type="button" class="btn btn--icon is-danger" (click)="pendingDelete.set(supplier)" [attr.aria-label]="'Excluir ' + supplier.name" title="Excluir">
+                        <app-icon name="trash" [size]="16" />
+                      </button>
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <app-pagination [meta]="result.meta" (pageChange)="goTo($event)" />
+      }
+    }
+  </div>
+</article>
+
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="supplier-dialog-title">
+  <form (submit)="$event.preventDefault(); save()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="truck" [size]="20" /></span>
+      <div>
+        <h2 id="supplier-dialog-title">{{ title() }}</h2>
+        <p>Autopeças, distribuidora, prestador de serviço...</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="formOpen.set(false)" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      <div class="field" [class.field--invalid]="errors().name">
+        <label for="supplier-name">Nome</label>
+        <div class="field__control">
+          <input id="supplier-name" maxlength="150" [value]="form().name" (input)="set('name', $any($event.target).value)" />
+        </div>
+        @if (errors().name; as message) {
+          <small class="field__error">{{ message }}</small>
+        }
+      </div>
+      <div class="dialog__grid">
+        <div class="field" [class.field--invalid]="errors().document">
+          <label for="supplier-document">CNPJ / CPF <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="supplier-document" [value]="form().document" (input)="set('document', $any($event.target).value, 'document')" />
+          </div>
+          @if (errors().document; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().contact_name">
+          <label for="supplier-contact">Contato <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="supplier-contact" maxlength="120" placeholder="Nome do vendedor" [value]="form().contact_name" (input)="set('contact_name', $any($event.target).value)" />
+          </div>
+        </div>
+        <div class="field" [class.field--invalid]="errors().phone">
+          <label for="supplier-phone">Telefone <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="phone" />
+            <input id="supplier-phone" inputmode="tel" [value]="form().phone" (input)="set('phone', $any($event.target).value, 'phone')" />
+          </div>
+          @if (errors().phone; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errors().email">
+          <label for="supplier-email">E-mail <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="mail" />
+            <input id="supplier-email" type="email" [value]="form().email" (input)="set('email', $any($event.target).value)" />
+          </div>
+          @if (errors().email; as message) {
+            <small class="field__error">{{ message }}</small>
+          }
+        </div>
+      </div>
+      <div class="field">
+        <label for="supplier-notes">Observações <span class="optional">(opcional)</span></label>
+        <div class="field__control field__control--textarea">
+          <textarea id="supplier-notes" rows="2" maxlength="1000" [value]="form().notes" (input)="set('notes', $any($event.target).value)"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="formOpen.set(false)" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        Salvar
+      </button>
+    </footer>
+  </form>
+</dialog>
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir fornecedor?"
+  [message]="'“' + (pendingDelete()?.name ?? '') + '” sai da lista. As contas já lançadas continuam no histórico com o nome dele.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>

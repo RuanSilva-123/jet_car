@@ -4,6 +4,7 @@ import { map, Observable } from 'rxjs';
 
 import { API_URL, ApiResource } from '../../../core/http/api';
 import { ServiceOrderStatus } from '../../service-orders/models/service-order';
+import { BackupStatus } from '../../settings/shop-settings.service';
 
 export interface DashboardOrder {
   id: number;
@@ -37,7 +38,28 @@ export interface DashboardData {
     received_cents: number;
     receivable_cents: number;
     receivable_count: number;
+    bills_overdue_count: number;
+    bills_overdue_cents: number;
+    bills_due_soon_count: number;
+    bills_due_soon_cents: number;
+    cash_balance_cents: number;
   } | null;
+  /** Pesquisa de satisfação dos últimos 90 dias (NPS = % promotores − % detratores). */
+  satisfaction: {
+    responses: number;
+    nps: number | null;
+    average: number | null;
+    promoters: number;
+    passives: number;
+    detractors: number;
+    days: number;
+    recent: { id: number; number: string; customer: string; score: number; comment: string | null; answered_at: string }[];
+    /** Entregues nos últimos 30 dias ainda sem avaliação. */
+    awaiting: number;
+  };
+  warranty_returns_month: number;
+  /** Só para o master. */
+  backup: BackupStatus | null;
   appointments_today: {
     count: number;
     items: { id: number; scheduled_at: string; status: string; customer: string; vehicle: string | null; plate: string | null }[];

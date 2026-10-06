@@ -46,6 +46,32 @@
     <app-order-stepper [current]="flow()!" />
   }
 
+  <!-- Garantia -->
+  @if (order.warranty_of; as original) {
+    <div class="banner banner--info">
+      <app-icon name="shield" />
+      <span>
+        Retorno em garantia da <a [routerLink]="['/service-orders', original.id]">OS #{{ original.number }}</a>{{
+          original.warranty_until ? ' (garantia até ' + (original.warranty_until + 'T12:00:00' | date: 'dd/MM/yyyy') + ')' : ''
+        }}. Os serviços marcados como “Garantia” não são cobrados.
+      </span>
+      @if (canEdit() && !hasDoneWarrantyItem()) {
+        <button type="button" class="btn btn--sm btn--ghost" (click)="confirmUnlinkWarranty.set(true)" [disabled]="busy()">Desfazer vínculo</button>
+      }
+    </div>
+  }
+  @if (order.warranty_returns?.length) {
+    <div class="banner banner--warning">
+      <app-icon name="refresh" />
+      <span>
+        {{ order.warranty_returns!.length === 1 ? 'Este serviço voltou em garantia:' : 'Este serviço voltou ' + order.warranty_returns!.length + ' vezes em garantia:' }}
+        @for (back of order.warranty_returns; track back.id; let last = $last) {
+          <a [routerLink]="['/service-orders', back.id]">OS #{{ back.number }}</a> ({{ back.status_label.toLowerCase() }}){{ last ? '.' : ', ' }}
+        }
+      </span>
+    </div>
+  }
+
   <!-- Avisos do fluxo -->
   @if (order.budget_changed_after_approval && !order.is_final) {
     <div class="banner banner--warning">
@@ -209,7 +235,9 @@
                     <small class="mechanic-name"><app-icon name="user" [size]="12" /> {{ item.mechanic }}</small>
                   }
                 </div>
-                @if (item.price_cents === null) {
+                @if (item.warranty_of_item_id) {
+                  <span class="checklist__price warranty-tag" title="Refeito na garantia, sem custo"><app-icon name="shield" [size]="13" /> Garantia</span>
+                } @else if (item.price_cents === null) {
                   <span class="checklist__price tbd">a definir</span>
                 } @else {
                   <span class="checklist__price">{{ item.price_cents | money }}</span>
@@ -498,8 +526,61 @@
             </ul>
           }
           @if (order.balance_cents > 0) {
-            <button type="button" class="btn btn--sm btn--primary" (click)="paymentOpen.set(true)">
-              <app-icon name="plus" [size]="14" /> Registrar pagamento
+            <div class="payment__actions">
+              <button type="button" class="btn btn--sm btn--ghost" (click)="pixOpen.set(true)" title="QR Code e Pix copia-e-cola com o valor">
+                <app-icon name="qr-code" [size]="14" /> Cobrar com Pix
+              </button>
+              <button type="button" class="btn btn--sm btn--primary" (click)="paymentOpen.set(true)">
+                <app-icon name="plus" [size]="14" /> Registrar pagamento
+              </button>
+            </div>
+          }
+        </article>
+      }
+
+      <!-- Pesquisa de satisfação -->
+      @if (order.status === 'delivered' || order.survey_answered_at) {
+        <article class="card info survey">
+          <h3>Avaliação do cliente</h3>
+          @if (order.survey_score !== null) {
+            <div class="survey__score">
+              <span class="score score--{{ surveyCategory() }}">{{ order.survey_score }}</span>
+              <span>
+                <strong>{{ surveyLabel() }}</strong>
+                <small>Respondida em {{ order.survey_answered_at | date: 'dd/MM/yyyy' }}</small>
+              </span>
+            </div>
+            @if (order.survey_comment) {
+              <blockquote class="survey__comment">“{{ order.survey_comment }}”</blockquote>
+            }
+          } @else if (order.survey_url) {
+            <p class="muted">Pergunte de 0 a 10 o quanto o cliente indicaria a oficina. Leva 10 segundos para responder.</p>
+            @if (whatsappSurveyLink(); as link) {
+              <a class="btn btn--sm whatsapp-send" [href]="link" target="_blank" rel="noopener">
+                <app-icon name="whatsapp" [size]="16" /> Pedir avaliação pelo WhatsApp
+              </a>
+            }
+            <div class="public-link">
+              <span><app-icon name="link" [size]="14" /> Link da pesquisa</span>
+              <button type="button" class="link-button" (click)="copySurveyLink()">{{ surveyCopied() ? 'Copiado!' : 'Copiar link' }}</button>
+            </div>
+          }
+        </article>
+      }
+
+      <!-- Garantia -->
+      @if (warrantyCard(); as card) {
+        <article class="card info warranty-card">
+          <h3>Garantia</h3>
+          @if (card === 'until') {
+            <p class="warranty-card__state" [class.is-active]="warrantyActive()">
+              <app-icon name="shield" [size]="14" />
+              {{ warrantyActive() ? 'Na garantia até' : 'Garantia encerrada em' }} {{ order.warranty_until + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+            </p>
+          } @else {
+            <p class="muted">O carro voltou por um serviço feito aqui e ainda na garantia?</p>
+            <button type="button" class="btn btn--sm btn--ghost" (click)="warrantyOpen.set(true)">
+              <app-icon name="shield" [size]="14" /> Marcar retorno em garantia
             </button>
           }
         </article>
@@ -683,7 +764,22 @@
 
   @if (canManageFinance()) {
     <app-payment-dialog [open]="paymentOpen()" [order]="order" (saved)="onPaymentSaved($event)" (closed)="paymentOpen.set(false)" />
+    <app-pix-dialog [open]="pixOpen()" [order]="order" (closed)="pixOpen.set(false)" (registerPayment)="pixOpen.set(false); paymentOpen.set(true)" />
   }
+
+  <app-warranty-dialog [open]="warrantyOpen()" [order]="order" (saved)="onWarrantyLinked($event)" (closed)="warrantyOpen.set(false)" />
+
+  <app-confirm-dialog
+    [open]="confirmUnlinkWarranty()"
+    title="Desfazer retorno em garantia?"
+    message="Os serviços de garantia que ainda não foram feitos saem desta OS e ela deixa de contar como retorno."
+    confirmLabel="Desfazer"
+    icon="shield"
+    tone="danger"
+    [busy]="busy()"
+    (confirmed)="unlinkWarranty()"
+    (cancelled)="confirmUnlinkWarranty.set(false)"
+  />
 
   <app-confirm-dialog
     [open]="pendingPaymentRemoval() !== null"

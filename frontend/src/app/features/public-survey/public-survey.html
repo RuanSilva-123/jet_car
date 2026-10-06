@@ -1,0 +1,108 @@
+<div class="page">
+  <header class="brand">
+    <app-logo class="brand__logo" />
+  </header>
+
+  @if (loading()) {
+    <div class="card state"><span class="spinner spinner--dark"></span></div>
+  } @else if (loadError(); as kind) {
+    <div class="card state">
+      <span class="state__icon"><app-icon [name]="kind === 'expired' ? 'clock' : 'alert'" [size]="22" /></span>
+      <h1>{{ kind === 'expired' ? 'Este link expirou' : kind === 'invalid' ? 'Link inválido' : 'Não foi possível abrir a pesquisa' }}</h1>
+      <p>
+        @if (kind === 'expired') {
+          O prazo para avaliar este atendimento acabou. Obrigado mesmo assim!
+        } @else if (kind === 'invalid') {
+          Confira se o endereço foi copiado inteiro.
+        } @else {
+          Verifique sua conexão e tente novamente.
+        }
+      </p>
+    </div>
+  } @else if (survey(); as survey) {
+    @switch (survey.state) {
+      @case ('answered') {
+        <div class="card state">
+          <span class="state__icon state__icon--success"><app-icon name="smile" [size]="24" /></span>
+          <h1>Obrigado pela avaliação!</h1>
+          <p>
+            Sua nota {{ survey.score }} para o atendimento da OS #{{ survey.order.number }} foi registrada. A equipe da
+            {{ survey.shop.name }} agradece.
+          </p>
+          @if (survey.score !== null && survey.score <= 6 && shopWhatsapp(); as link) {
+            <a class="btn btn--ghost btn--sm" [href]="link" target="_blank" rel="noopener"><app-icon name="whatsapp" [size]="16" /> Falar com a oficina</a>
+          }
+        </div>
+      }
+      @case ('unavailable') {
+        <div class="card state">
+          <span class="state__icon"><app-icon name="clock" [size]="22" /></span>
+          <h1>Avaliação indisponível</h1>
+          <p>Este atendimento ainda não foi concluído. Você poderá avaliar depois da entrega do veículo.</p>
+        </div>
+      }
+      @default {
+        <main class="content">
+          <section class="intro">
+            <p class="eyebrow">{{ survey.shop.name }}</p>
+            <h1>Como foi o atendimento?</h1>
+            <p>
+              Olá, {{ survey.order.customer_first_name }}! Conte para a gente como foi o serviço no seu
+              <strong>{{ survey.order.vehicle }}</strong> (OS #{{ survey.order.number }}).
+            </p>
+          </section>
+
+          <form class="card ask" (submit)="$event.preventDefault(); submit()" novalidate>
+            <fieldset class="scale">
+              <legend>De 0 a 10, o quanto você indicaria a nossa oficina para um amigo?</legend>
+              <div class="scale__buttons" role="radiogroup" aria-label="Nota de 0 a 10">
+                @for (value of scores; track value) {
+                  <button
+                    type="button"
+                    role="radio"
+                    class="scale__button"
+                    [class.is-selected]="score() === value"
+                    [class.is-low]="value <= 6"
+                    [class.is-mid]="value === 7 || value === 8"
+                    [class.is-high]="value >= 9"
+                    [attr.aria-checked]="score() === value"
+                    (click)="score.set(value); error.set(null)"
+                  >
+                    {{ value }}
+                  </button>
+                }
+              </div>
+              <div class="scale__legend"><span>Não indicaria</span><span>Com certeza indicaria</span></div>
+            </fieldset>
+
+            <div class="field">
+              <label for="survey-comment">{{ commentPrompt() }} <span class="optional">(opcional)</span></label>
+              <div class="field__control field__control--textarea">
+                <textarea
+                  id="survey-comment"
+                  rows="3"
+                  maxlength="1000"
+                  [value]="comment()"
+                  (input)="comment.set($any($event.target).value)"
+                ></textarea>
+              </div>
+            </div>
+
+            @if (error(); as message) {
+              <p class="ask__error" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+            }
+
+            <button type="submit" class="btn btn--primary btn--block" [disabled]="sending() || score() === null">
+              @if (sending()) {
+                <span class="spinner"></span>
+              } @else {
+                <app-icon name="check" [size]="16" />
+              }
+              Enviar avaliação
+            </button>
+          </form>
+        </main>
+      }
+    }
+  }
+</div>

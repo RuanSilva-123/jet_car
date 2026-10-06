@@ -3,6 +3,7 @@ import { inject, Injectable } from '@angular/core';
 import { map, Observable, switchMap } from 'rxjs';
 
 import { API_URL, ApiResource, CSRF_COOKIE_URL } from '../../core/http/api';
+import { PixCharge } from '../../shared/components/pix-charge/pix-charge';
 
 export interface PublicBudget {
   state: 'awaiting' | 'approved' | 'rejected' | 'unavailable';
@@ -14,14 +15,18 @@ export interface PublicBudget {
     customer_first_name: string;
     vehicle: { brand: string; model: string; model_year: number | null; plate: string | null };
     complaint: string | null;
-    items: { name: string; notes: string | null; price_cents: number | null }[];
+    items: { name: string; notes: string | null; price_cents: number | null; warranty: boolean }[];
     parts: { name: string; quantity: number; unit_price_cents: number | null; total_cents: number | null }[];
     labor_total_cents: number;
     parts_total_cents: number;
     discount_cents: number;
     total_cents: number;
     budget_approved_at: string | null;
+    paid_cents: number;
+    balance_cents: number;
   };
+  /** Aprovado e com saldo em aberto: cobrança Pix pronta (null se a oficina não cadastrou a chave). */
+  pix: PixCharge | null;
 }
 
 /** Orçamento aberto pelo cliente pelo link assinado (sem login). */

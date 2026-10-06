@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 
-import { FLOW_STEPS, flowStep, nextStep, ServiceOrderStatus, STATUS_ORDER } from '../models/service-order';
+import { FLOW_STEPS, flowStep, nextStep, npsCategory, ServiceOrderStatus, STATUS_ORDER } from '../models/service-order';
 import { ServiceOrdersService } from './service-orders.service';
 
 describe('ServiceOrdersService', () => {
@@ -26,6 +26,38 @@ describe('ServiceOrdersService', () => {
     expect(req.request.params.has('status')).toBe(false);
     expect(req.request.params.get('vehicle_id')).toBe('7');
     expect(req.request.params.get('search')).toBe('ruan');
+  });
+
+  it('gera a cobrança Pix do saldo ou de parte dele', () => {
+    api.pix(5).subscribe();
+    expect(http.expectOne((r) => r.url === '/api/v1/service-orders/5/pix').request.params.has('amount_cents')).toBe(false);
+
+    api.pix(5, 5000).subscribe();
+    expect(http.expectOne((r) => r.url === '/api/v1/service-orders/5/pix' && r.params.has('amount_cents')).request.params.get('amount_cents')).toBe('5000');
+  });
+
+  it('vincula e desfaz o retorno em garantia', () => {
+    let days = 0;
+    api.warrantyCandidates(8).subscribe((result) => (days = result.warrantyDays));
+    http.expectOne('/api/v1/service-orders/8/warranty/candidates').flush({ data: [], warranty_days: 90 });
+    expect(days).toBe(90);
+
+    api.linkWarranty(8, 3, [11, 12]).subscribe();
+    const link = http.expectOne('/api/v1/service-orders/8/warranty');
+    expect(link.request.method).toBe('POST');
+    expect(link.request.body).toEqual({ warranty_of_id: 3, item_ids: [11, 12] });
+
+    api.unlinkWarranty(8).subscribe();
+    expect(http.expectOne('/api/v1/service-orders/8/warranty').request.method).toBe('DELETE');
+  });
+
+  it('classifica a nota da pesquisa como no NPS', () => {
+    expect(npsCategory(10)).toBe('promoter');
+    expect(npsCategory(9)).toBe('promoter');
+    expect(npsCategory(8)).toBe('passive');
+    expect(npsCategory(7)).toBe('passive');
+    expect(npsCategory(6)).toBe('detractor');
+    expect(npsCategory(0)).toBe('detractor');
   });
 
   it('adiciona e remove serviços e peças do diagnóstico', () => {
