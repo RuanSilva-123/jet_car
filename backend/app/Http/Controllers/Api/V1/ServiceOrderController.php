@@ -267,6 +267,27 @@ class ServiceOrderController extends Controller
         return $this->detail($serviceOrder);
     }
 
+    /** Altera valor unitário e/ou quantidade de uma peça da OS (também as do estoque). */
+    public function updatePart(Request $request, ServiceOrder $serviceOrder, ServiceOrderPart $part): ServiceOrderResource
+    {
+        Gate::authorize('update', $serviceOrder);
+        abort_unless($part->service_order_id === $serviceOrder->id, 404);
+
+        $data = $request->validate([
+            'quantity' => ['sometimes', 'required', 'numeric', 'gt:0', 'max:99999'],
+            'unit_price_cents' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100000000'],
+        ], [
+            'quantity.required' => 'Informe a quantidade.',
+            'quantity.gt' => 'Quantidade deve ser maior que zero.',
+            'quantity.*' => 'Quantidade inválida.',
+            'unit_price_cents.*' => 'Valor da peça inválido.',
+        ]);
+
+        $this->orders->updatePart($serviceOrder, $part, $data, $request->user());
+
+        return $this->detail($serviceOrder);
+    }
+
     public function removePart(Request $request, ServiceOrder $serviceOrder, ServiceOrderPart $part): ServiceOrderResource
     {
         Gate::authorize('update', $serviceOrder);

@@ -28,6 +28,13 @@ describe('ServiceOrdersService', () => {
     expect(req.request.params.get('search')).toBe('ruan');
   });
 
+  it('altera valor e quantidade de uma peça da OS', () => {
+    api.updatePart(5, 9, { unit_price_cents: 9900 }).subscribe();
+    const req = http.expectOne('/api/v1/service-orders/5/parts/9');
+    expect(req.request.method).toBe('PATCH');
+    expect(req.request.body).toEqual({ unit_price_cents: 9900 });
+  });
+
   it('gera a cobrança Pix do saldo ou de parte dele', () => {
     api.pix(5).subscribe();
     expect(http.expectOne((r) => r.url === '/api/v1/service-orders/5/pix').request.params.has('amount_cents')).toBe(false);

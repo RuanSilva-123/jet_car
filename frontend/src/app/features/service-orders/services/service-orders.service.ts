@@ -97,6 +97,11 @@ export class ServiceOrdersService {
     return this.http.post<ApiResource<ServiceOrder>>(`${this.url}/${id}/parts`, part).pipe(map(({ data }) => data));
   }
 
+  /** Ajusta valor unitário e/ou quantidade de uma peça da OS (também as do estoque). */
+  updatePart(id: number, partId: number, changes: { quantity?: number; unit_price_cents?: number | null }): Observable<ServiceOrder> {
+    return this.http.patch<ApiResource<ServiceOrder>>(`${this.url}/${id}/parts/${partId}`, changes).pipe(map(({ data }) => data));
+  }
+
   removePart(id: number, partId: number): Observable<ServiceOrder> {
     return this.http.delete<ApiResource<ServiceOrder>>(`${this.url}/${id}/parts/${partId}`).pipe(map(({ data }) => data));
   }

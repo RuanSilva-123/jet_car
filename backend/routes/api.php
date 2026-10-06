@@ -97,6 +97,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::delete('warranty', 'unlinkWarranty')->name('warranty.unlink');
             Route::delete('items/{item}', 'removeItem')->whereNumber('item')->name('items.destroy');
             Route::post('parts', 'addPart')->name('parts.store');
+            Route::patch('parts/{part}', 'updatePart')->whereNumber('part')->name('parts.update');
             Route::delete('parts/{part}', 'removePart')->whereNumber('part')->name('parts.destroy');
         });
 

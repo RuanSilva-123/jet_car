@@ -445,6 +445,51 @@ class ServiceOrderManager
         });
     }
 
+    /**
+     * Ajuste de uma peça já na OS: valor unitário (inclusive de peça do estoque, que entra com o
+     * preço de venda do catálogo) e/ou quantidade. Peça do estoque baixa/devolve só a diferença.
+     *
+     * @param  array{quantity?: float|string, unit_price_cents?: int|null}  $data
+     */
+    public function updatePart(ServiceOrder $order, ServiceOrderPart $part, array $data, User $actor): ServiceOrderPart
+    {
+        $this->ensureEditable($order);
+
+        return DB::transaction(function () use ($order, $part, $data, $actor) {
+            $previousQuantity = (float) $part->quantity;
+            $previousPrice = $part->unit_price_cents;
+
+            if (array_key_exists('quantity', $data)) {
+                $part->quantity = $data['quantity'];
+            }
+            if (array_key_exists('unit_price_cents', $data)) {
+                $part->unit_price_cents = $data['unit_price_cents'] === null ? null : (int) $data['unit_price_cents'];
+            }
+            if (! $part->isDirty()) {
+                return $part;
+            }
+            $part->save();
+
+            $difference = (float) $part->quantity - $previousQuantity;
+            if ($difference != 0.0 && $part->part_id && $part->catalogPart) {
+                $this->stock->forOrder($part->catalogPart, $difference, $order, $actor);
+            }
+            $this->recalculateTotals($order);
+
+            $changes = [];
+            if ($difference != 0.0) {
+                $changes[] = 'quantidade '.Money::quantity($previousQuantity).' → '.Money::quantity($part->quantity);
+            }
+            if ($previousPrice !== $part->unit_price_cents) {
+                $format = fn (?int $cents) => $cents === null ? 'a definir' : Money::format($cents);
+                $changes[] = 'valor '.$format($previousPrice).' → '.$format($part->unit_price_cents);
+            }
+            $this->record($order, $actor, 'budget_updated', "Peça alterada: {$part->name} (".implode('; ', $changes).').');
+
+            return $part;
+        });
+    }
+
     public function removePart(ServiceOrder $order, ServiceOrderPart $part, User $actor): void
     {
         $this->ensureEditable($order);

@@ -95,6 +95,36 @@ class PartInventoryTest extends TestCase
         $this->assertSame(10.0, $this->stockOf($part));
     }
 
+    public function test_stock_part_price_and_quantity_can_be_changed_in_the_order(): void
+    {
+        $part = Part::factory()->stock(10)->create(['name' => 'Correia do alternador', 'price_cents' => 12000]);
+        $order = ServiceOrder::factory()->create();
+        $lineId = $this->postJson("/api/v1/service-orders/{$order->id}/parts", ['part_id' => $part->id, 'quantity' => 1])->json('data.parts.0.id');
+
+        // Só o valor: o catálogo continua com o preço dele e o estoque não mexe
+        $this->patchJson("/api/v1/service-orders/{$order->id}/parts/{$lineId}", ['unit_price_cents' => 9900])
+            ->assertOk()
+            ->assertJsonPath('data.parts.0.unit_price_cents', 9900)
+            ->assertJsonPath('data.parts.0.total_cents', 9900)
+            ->assertJsonPath('data.parts_total_cents', 9900)
+            ->assertJsonPath('data.events.0.type', 'budget_updated');
+        $this->assertSame(12000, $part->fresh()->price_cents);
+        $this->assertSame(9.0, $this->stockOf($part));
+
+        // Quantidade: baixa só a diferença e o total acompanha
+        $this->patchJson("/api/v1/service-orders/{$order->id}/parts/{$lineId}", ['quantity' => 3])
+            ->assertOk()
+            ->assertJsonPath('data.parts.0.unit_price_cents', 9900)
+            ->assertJsonPath('data.parts_total_cents', 29700);
+        $this->assertSame(7.0, $this->stockOf($part));
+
+        $this->patchJson("/api/v1/service-orders/{$order->id}/parts/{$lineId}", ['quantity' => 0])->assertUnprocessable();
+
+        // OS de outra peça / outra OS
+        $other = ServiceOrder::factory()->create();
+        $this->patchJson("/api/v1/service-orders/{$other->id}/parts/{$lineId}", ['unit_price_cents' => 1])->assertNotFound();
+    }
+
     public function test_budget_update_moves_only_the_quantity_difference(): void
     {
         $part = Part::factory()->stock(10)->create();

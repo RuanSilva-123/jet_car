@@ -93,3 +93,59 @@
     color: var(--color-danger);
   }
 }
+
+// Valor e quantidade editáveis na tabela de peças: parece texto, vira campo no hover/foco
+.cell-input {
+  width: 100%;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+
+  &:hover:not(:disabled) {
+    border-color: var(--color-border);
+    background: var(--color-hover);
+  }
+
+  &:focus {
+    border-color: var(--color-primary);
+    background: var(--color-surface);
+    outline: 0;
+    box-shadow: 0 0 0 3px var(--color-focus-ring);
+  }
+
+  &:disabled {
+    opacity: 0.6;
+  }
+
+  &::placeholder {
+    color: var(--color-warning);
+    font-style: italic;
+  }
+
+  &--qty {
+    width: 64px;
+    text-align: center;
+  }
+}
+
+.cell-money {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 2px;
+  width: 132px;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  cursor: text;
+
+  &.is-unpriced span {
+    visibility: hidden;
+  }
+}

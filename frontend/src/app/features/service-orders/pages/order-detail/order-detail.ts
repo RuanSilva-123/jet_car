@@ -12,7 +12,7 @@ import { Combobox, ComboboxOption } from '../../../../shared/components/combobox
 import { Icon, IconName } from '../../../../shared/components/icon/icon';
 import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
-import { formatMoney, formatPlate, formatQuantity, maskQuantity, parseQuantity } from '../../../../shared/utils/br-format';
+import { centsToInput, formatMoney, formatPlate, formatQuantity, maskMoney, maskQuantity, moneyToCents, parseQuantity } from '../../../../shared/utils/br-format';
 import { Part } from '../../../parts/models/part';
 import { PartsService } from '../../../parts/services/parts.service';
 import { ServiceFormDialog } from '../../../services/components/service-form-dialog/service-form-dialog';
@@ -132,6 +132,11 @@ export class OrderDetail implements OnInit {
   protected readonly stockParts = signal<Part[]>([]);
   protected readonly searchingStock = signal(false);
   protected readonly stockPart = signal<Part | null>(null);
+
+  /** Peça com valor/quantidade sendo salvo na tabela. */
+  protected readonly savingPart = signal<number | null>(null);
+  protected readonly centsToInput = centsToInput;
+  protected readonly formatQuantity = formatQuantity;
 
   // Responsável por serviço
   protected readonly mechanics = signal<{ id: number; name: string }[]>([]);
@@ -437,6 +442,77 @@ export class OrderDetail implements OnInit {
     const order = this.order();
     if (!order) return;
     this.removeLine(`part-${part.id}`, this.orders.removePart(order.id, part.id));
+  }
+
+  // --- valor e quantidade direto na tabela de peças (inclusive peça do estoque) ----
+
+  protected maskPartPrice(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    input.value = maskMoney(input.value);
+  }
+
+  protected maskPartQuantity(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    input.value = maskQuantity(input.value);
+  }
+
+  /** Esc desfaz o que foi digitado; Enter confirma (salva no blur). */
+  protected onPartKey(event: KeyboardEvent, part: ServiceOrderPart, field: 'price' | 'quantity'): void {
+    const input = event.target as HTMLInputElement;
+    if (event.key === 'Escape') {
+      input.value = field === 'price' ? this.priceText(part) : formatQuantity(part.quantity);
+      input.blur();
+    } else if (event.key === 'Enter') {
+      event.preventDefault();
+      input.blur();
+    }
+  }
+
+  protected savePartPrice(part: ServiceOrderPart, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const cents = input.value.trim() ? moneyToCents(input.value) : null;
+    if (cents === part.unit_price_cents) {
+      input.value = this.priceText(part);
+      return;
+    }
+    this.patchPart(part, { unit_price_cents: cents }, () => (input.value = this.priceText(part)));
+  }
+
+  protected savePartQuantity(part: ServiceOrderPart, event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const quantity = parseQuantity(input.value);
+    const revert = () => (input.value = formatQuantity(part.quantity));
+    if (quantity === part.quantity) {
+      revert();
+      return;
+    }
+    if (quantity <= 0) {
+      this.toast.error('A quantidade deve ser maior que zero. Para tirar a peça, use a lixeira.');
+      revert();
+      return;
+    }
+    this.patchPart(part, { quantity }, revert);
+  }
+
+  protected priceText(part: ServiceOrderPart): string {
+    return part.unit_price_cents === null ? '' : centsToInput(part.unit_price_cents);
+  }
+
+  private patchPart(part: ServiceOrderPart, changes: { quantity?: number; unit_price_cents?: number | null }, revert: () => void): void {
+    const order = this.order();
+    if (!order) return;
+
+    this.savingPart.set(part.id);
+    this.orders
+      .updatePart(order.id, part.id, changes)
+      .pipe(finalize(() => this.savingPart.set(null)))
+      .subscribe({
+        next: (updated) => this.order.set(updated),
+        error: (error: unknown) => {
+          revert();
+          this.toast.error(this.describeError(error));
+        },
+      });
   }
 
   /** Leva até o campo de adicionar serviço. */

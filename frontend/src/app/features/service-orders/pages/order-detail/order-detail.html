@@ -367,14 +367,52 @@
                         <span class="stock-tag" title="Saiu do estoque">estoque</span>
                       }
                     </td>
-                    <td class="center">{{ part.quantity | brFormat: 'quantity' }}</td>
-                    @if (part.unit_price_cents === null) {
-                      <td class="right tbd">a definir</td>
-                      <td class="right tbd">—</td>
+                    @if (canEdit()) {
+                      <!-- Editável direto na tabela (inclusive peça do estoque): Enter ou sair do campo salva -->
+                      <td class="center">
+                        <input
+                          class="cell-input cell-input--qty"
+                          [value]="formatQuantity(part.quantity)"
+                          (input)="maskPartQuantity($event)"
+                          (keydown)="onPartKey($event, part, 'quantity')"
+                          (blur)="savePartQuantity(part, $event)"
+                          [disabled]="savingPart() === part.id"
+                          inputmode="decimal"
+                          [attr.aria-label]="'Quantidade de ' + part.name"
+                          title="Clique para alterar a quantidade"
+                        />
+                      </td>
+                      <td class="right">
+                        <label class="cell-money" [class.is-unpriced]="part.unit_price_cents === null" title="Clique para alterar o valor">
+                          <span>R$</span>
+                          <input
+                            class="cell-input"
+                            [value]="priceText(part)"
+                            (input)="maskPartPrice($event)"
+                            (keydown)="onPartKey($event, part, 'price')"
+                            (blur)="savePartPrice(part, $event)"
+                            [disabled]="savingPart() === part.id"
+                            inputmode="numeric"
+                            placeholder="a definir"
+                            [attr.aria-label]="'Valor unitário de ' + part.name"
+                          />
+                        </label>
+                      </td>
                     } @else {
-                      <td class="right">{{ part.unit_price_cents | money }}</td>
-                      <td class="right"><strong>{{ part.total_cents ?? 0 | money }}</strong></td>
+                      <td class="center">{{ part.quantity | brFormat: 'quantity' }}</td>
+                      <td class="right" [class.tbd]="part.unit_price_cents === null">
+                        {{ part.unit_price_cents === null ? 'a definir' : (part.unit_price_cents | money) }}
+                      </td>
                     }
+                    <td class="right" [class.tbd]="part.total_cents === null">
+                      @if (savingPart() === part.id) {
+                        <span class="spinner spinner--dark"></span>
+                      } @else if (part.total_cents === null) {
+                        —
+                      } @else {
+                        <strong>{{ part.total_cents | money }}</strong>
+                      }
+                    </td>
                     @if (canEdit()) {
                       <td class="actions">
                         <button
