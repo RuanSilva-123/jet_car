@@ -37,4 +37,14 @@ class User extends Authenticatable
     {
         return $this->role === UserRole::Master;
     }
+
+    public function isMechanic(): bool
+    {
+        return $this->role === UserRole::Mechanic;
+    }
+
+    public function canManageFinance(): bool
+    {
+        return $this->role->canManageFinance();
+    }
 }

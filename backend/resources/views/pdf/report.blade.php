@@ -106,5 +106,34 @@
 
     @include('pdf.partials.parts-table', ['title' => $isFinished ? 'Peças utilizadas' : 'Peças'])
 
-    @include('pdf.partials.totals')
+    @include('pdf.partials.totals', ['showPayments' => true])
+
+    @if ($order->payments->isNotEmpty())
+        <div class="section">
+            <h2 class="section-title">Pagamentos</h2>
+            <table class="items">
+                <thead>
+                    <tr>
+                        <th style="width: 26mm;">Data</th>
+                        <th>Forma de pagamento</th>
+                        <th class="right money">Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($order->payments as $payment)
+                        <tr>
+                            <td>{{ $payment->paid_at->format('d/m/Y') }}</td>
+                            <td>
+                                <span class="name">{{ $payment->method->label() }}{{ $payment->installments > 1 ? ' em '.$payment->installments.'x' : '' }}</span>
+                                @if ($payment->notes)
+                                    <small>{{ $payment->notes }}</small>
+                                @endif
+                            </td>
+                            <td class="right money">{{ Money::format($payment->amount_cents) }}</td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        </div>
+    @endif
 @endsection

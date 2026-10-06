@@ -38,4 +38,14 @@ class ServiceOrderItem extends Model
     {
         return $this->belongsTo(User::class, 'done_by');
     }
+
+    /**
+     * Mecânico responsável pelo serviço.
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function mechanic(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'mechanic_id');
+    }
 }

@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /** Peça do orçamento da OS. */
-#[Fillable(['name', 'part_number', 'quantity', 'unit_price_cents', 'position'])]
+#[Fillable(['part_id', 'name', 'part_number', 'quantity', 'unit_price_cents', 'position'])]
 class ServiceOrderPart extends Model
 {
     /**
@@ -35,5 +35,15 @@ class ServiceOrderPart extends Model
     public function serviceOrder(): BelongsTo
     {
         return $this->belongsTo(ServiceOrder::class);
+    }
+
+    /**
+     * Peça do estoque (null = peça avulsa, digitada na OS).
+     *
+     * @return BelongsTo<Part, $this>
+     */
+    public function catalogPart(): BelongsTo
+    {
+        return $this->belongsTo(Part::class, 'part_id')->withTrashed();
     }
 }

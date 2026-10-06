@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api\V1;
 
 use App\Enums\ServiceOrderStatus;
+use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\ServiceOrders\SaveServiceOrderRequest;
 use App\Http\Resources\ServiceOrderResource;
@@ -10,6 +11,7 @@ use App\Models\LaborService;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderItem;
 use App\Models\ServiceOrderPart;
+use App\Models\User;
 use App\Services\ServiceOrders\ServiceOrderManager;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
@@ -32,6 +34,8 @@ class ServiceOrderController extends Controller
             'status' => ['nullable', Rule::in(['active', ...array_column(ServiceOrderStatus::cases(), 'value')])],
             'customer_id' => ['nullable', 'integer'],
             'vehicle_id' => ['nullable', 'integer'],
+            // Serviços atribuídos a um mecânico ("me" = usuário logado)
+            'mechanic_id' => ['nullable', 'regex:/^(me|\d+)$/'],
             'per_page' => ['nullable', 'integer', 'min:5', 'max:50'],
         ]);
 
@@ -44,6 +48,10 @@ class ServiceOrderController extends Controller
                 : $query->where('status', $status))
             ->when($filters['customer_id'] ?? null, fn (Builder $query, int $id) => $query->where('customer_id', $id))
             ->when($filters['vehicle_id'] ?? null, fn (Builder $query, int $id) => $query->where('vehicle_id', $id))
+            ->when($filters['mechanic_id'] ?? null, function (Builder $query, string $mechanic) use ($request) {
+                $id = $mechanic === 'me' ? $request->user()->id : (int) $mechanic;
+                $query->whereHas('items', fn (Builder $items) => $items->where('mechanic_id', $id));
+            })
             ->latest('id')
             ->paginate($filters['per_page'] ?? 15)
             ->withQueryString();
@@ -131,6 +139,25 @@ class ServiceOrderController extends Controller
         return $this->detail($serviceOrder);
     }
 
+    /** Mecânico responsável pelo serviço (null = sem responsável). */
+    public function assignMechanic(Request $request, ServiceOrder $serviceOrder, ServiceOrderItem $item): ServiceOrderResource
+    {
+        Gate::authorize('update', $serviceOrder);
+        abort_unless($item->service_order_id === $serviceOrder->id, 404);
+
+        $data = $request->validate([
+            'mechanic_id' => [
+                'present', 'nullable', 'integer',
+                Rule::exists('users', 'id')->where('role', UserRole::Mechanic->value)->where('is_active', true),
+            ],
+        ], ['mechanic_id.exists' => 'Selecione um mecânico ativo.']);
+
+        $mechanic = isset($data['mechanic_id']) ? User::findOrFail($data['mechanic_id']) : null;
+        $this->orders->assignMechanic($serviceOrder, $item, $mechanic, $request->user());
+
+        return $this->detail($serviceOrder);
+    }
+
     /** Diagnóstico: adiciona um serviço do catálogo (sem valor). */
     public function addItem(Request $request, ServiceOrder $serviceOrder): ServiceOrderResource
     {
@@ -170,16 +197,19 @@ class ServiceOrderController extends Controller
         Gate::authorize('update', $serviceOrder);
 
         $request->merge([
-            'name' => trim((string) $request->input('name')),
+            'name' => trim((string) $request->input('name')) ?: null,
             'part_number' => trim((string) $request->input('part_number')) ?: null,
         ]);
         $data = $request->validate([
-            'name' => ['required', 'string', 'max:150'],
+            // Do estoque: nome/código/preço vêm do catálogo e a quantidade sai do estoque
+            'part_id' => ['nullable', 'integer', Rule::exists('parts', 'id')->where('is_active', true)->whereNull('deleted_at')],
+            'name' => ['required_without:part_id', 'nullable', 'string', 'max:150'],
             'part_number' => ['nullable', 'string', 'max:60'],
             'quantity' => ['required', 'numeric', 'gt:0', 'max:99999'],
             'unit_price_cents' => ['nullable', 'integer', 'min:0', 'max:100000000'],
         ], [
-            'name.required' => 'Informe o nome da peça.',
+            'name.required_without' => 'Informe o nome da peça.',
+            'part_id.exists' => 'Peça inexistente ou inativa no estoque.',
             'quantity.required' => 'Informe a quantidade.',
             'quantity.gt' => 'Quantidade deve ser maior que zero.',
             'quantity.*' => 'Quantidade inválida.',
@@ -216,7 +246,7 @@ class ServiceOrderController extends Controller
 
     private function detail(ServiceOrder $order): ServiceOrderResource
     {
-        return new ServiceOrderResource($order->fresh()->load(['customer', 'vehicle', 'creator', 'items.doneBy', 'parts', 'events.user']));
+        return new ServiceOrderResource($order->fresh()->load(ServiceOrderResource::DETAIL_RELATIONS));
     }
 
     /** Busca por número da OS, cliente, placa ou modelo do veículo. */

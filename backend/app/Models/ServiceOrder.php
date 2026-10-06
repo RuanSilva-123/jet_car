@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\PaymentStatus;
 use App\Enums\ServiceOrderStatus;
 use Database\Factories\ServiceOrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -33,6 +34,7 @@ class ServiceOrder extends Model
             'parts_total_cents' => 'integer',
             'discount_cents' => 'integer',
             'total_cents' => 'integer',
+            'paid_cents' => 'integer',
             'budget_sent_at' => 'datetime',
             'budget_approved_at' => 'datetime',
             'budget_approved_total_cents' => 'integer',
@@ -65,6 +67,17 @@ class ServiceOrder extends Model
             : $this->parts()->whereNull('unit_price_cents')->count();
 
         return $items + $parts;
+    }
+
+    /** Quanto falta receber (negativo = cliente pagou a mais). */
+    public function balanceCents(): int
+    {
+        return $this->total_cents - $this->paid_cents;
+    }
+
+    public function paymentStatus(): PaymentStatus
+    {
+        return PaymentStatus::for($this->total_cents, $this->paid_cents);
     }
 
     /** Número exibido para o cliente: OS 00042. */
@@ -113,6 +126,14 @@ class ServiceOrder extends Model
     public function parts(): HasMany
     {
         return $this->hasMany(ServiceOrderPart::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<ServiceOrderPayment, $this>
+     */
+    public function payments(): HasMany
+    {
+        return $this->hasMany(ServiceOrderPayment::class)->orderBy('paid_at')->orderBy('id');
     }
 
     /**

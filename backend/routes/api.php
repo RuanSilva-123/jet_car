@@ -3,9 +3,13 @@
 use App\Http\Controllers\Api\V1\AddressLookupController;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\CustomerController;
+use App\Http\Controllers\Api\V1\FinanceController;
 use App\Http\Controllers\Api\V1\LaborServiceController;
+use App\Http\Controllers\Api\V1\MechanicController;
+use App\Http\Controllers\Api\V1\PartController;
 use App\Http\Controllers\Api\V1\PlateLookupController;
 use App\Http\Controllers\Api\V1\ServiceOrderController;
+use App\Http\Controllers\Api\V1\ServiceOrderPaymentController;
 use App\Http\Controllers\Api\V1\ServiceOrderPdfController;
 use App\Http\Controllers\Api\V1\ShopSettingsController;
 use App\Http\Controllers\Api\V1\VehicleHistoryController;
@@ -31,6 +35,9 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         // Gestão de contas (somente master — ver UserPolicy)
         Route::apiResource('users', UserController::class);
 
+        // Mecânicos ativos (atribuição dos serviços da OS)
+        Route::get('mechanics', MechanicController::class)->name('mechanics.index');
+
         // Clientes e seus veículos (exclusão só para o master — ver CustomerPolicy)
         Route::apiResource('customers', CustomerController::class);
 
@@ -44,10 +51,21 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::post('notes', 'addNote')->name('notes');
             Route::post('items', 'addItem')->name('items.store');
             Route::patch('items/{item}', 'toggleItem')->whereNumber('item')->name('items.toggle');
+            Route::put('items/{item}/mechanic', 'assignMechanic')->whereNumber('item')->name('items.mechanic');
             Route::delete('items/{item}', 'removeItem')->whereNumber('item')->name('items.destroy');
             Route::post('parts', 'addPart')->name('parts.store');
             Route::delete('parts/{part}', 'removePart')->whereNumber('part')->name('parts.destroy');
         });
+
+        // Recebimentos da OS (registrar: financeiro; remover: só master)
+        Route::post('service-orders/{service_order}/payments', [ServiceOrderPaymentController::class, 'store'])->name('service-orders.payments.store');
+        Route::delete('service-orders/{service_order}/payments/{payment}', [ServiceOrderPaymentController::class, 'destroy'])
+            ->whereNumber('payment')
+            ->name('service-orders.payments.destroy');
+
+        // Financeiro: contas a receber e recebimentos do período
+        Route::get('receivables', [FinanceController::class, 'receivables'])->name('receivables.index');
+        Route::get('payments', [FinanceController::class, 'payments'])->name('payments.index');
 
         // PDFs da OS: orçamento (para o cliente aprovar) e comprovante do serviço realizado
         Route::get('service-orders/{service_order}/pdf/{document}', ServiceOrderPdfController::class)
@@ -60,6 +78,11 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
 
         // Histórico de serviços do veículo
         Route::get('vehicles/{vehicle}/history', VehicleHistoryController::class)->whereNumber('vehicle')->name('vehicles.history');
+
+        // Estoque de peças (exclusão só para o master — ver PartPolicy)
+        Route::post('parts/{part}/stock', [PartController::class, 'moveStock'])->name('parts.stock');
+        Route::get('parts/{part}/movements', [PartController::class, 'movements'])->name('parts.movements');
+        Route::apiResource('parts', PartController::class);
 
         // Catálogo de mão de obra (exclusão só para o master — ver LaborServicePolicy)
         Route::post('labor-services/suggestions', [LaborServiceController::class, 'importSuggestions'])

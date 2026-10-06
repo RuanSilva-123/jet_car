@@ -24,7 +24,7 @@ class ServiceOrderPdfController extends Controller
     {
         Gate::authorize('view', $serviceOrder);
 
-        $order = $serviceOrder->load(['customer', 'vehicle', 'items.doneBy', 'parts', 'creator']);
+        $order = $serviceOrder->load(['customer', 'vehicle', 'items.doneBy', 'parts', 'payments', 'creator']);
 
         $filename = ($document === 'budget' ? 'Orcamento' : 'Ordem-de-servico').'-'.$order->number().'.pdf';
 

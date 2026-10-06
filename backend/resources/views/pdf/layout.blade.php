@@ -82,6 +82,8 @@
         .totals tr.discount td { color: #15803d; }
         .totals tr.grand td { padding-top: 2.2mm; border-top: 0.35mm solid #18181b; color: #18181b; font-size: 10pt; font-weight: bold; }
         .totals tr.grand td.value { font-size: 13pt; }
+        .totals tr.balance td { color: #b91c1c; font-weight: bold; }
+        .totals tr.paid td { color: #15803d; font-weight: bold; }
         .totals-note { margin-top: 1.5mm; color: #a1a1aa; font-size: 7.5pt; text-align: right; }
 
     </style>

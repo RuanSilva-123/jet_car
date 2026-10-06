@@ -4,11 +4,13 @@ namespace App\Services\ServiceOrders;
 
 use App\Enums\ServiceOrderStatus;
 use App\Models\LaborService;
+use App\Models\Part;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderItem;
 use App\Models\ServiceOrderPart;
 use App\Models\User;
 use App\Models\Vehicle;
+use App\Services\Inventory\StockManager;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -23,6 +25,8 @@ use Illuminate\Validation\ValidationException;
  */
 class ServiceOrderManager
 {
+    public function __construct(private readonly StockManager $stock) {}
+
     /**
      * @param  array<string, mixed>  $data  dados validados (SaveServiceOrderRequest)
      */
@@ -171,6 +175,7 @@ class ServiceOrderManager
             $order->status = $cancel ? ServiceOrderStatus::Canceled : ServiceOrderStatus::Open;
             $this->applyStatusTimestamps($order, $order->status, $from);
             $order->save();
+            $this->syncStockWithStatus($order, $from, $order->status, $actor);
 
             $description = 'Orçamento recusado pelo cliente ('.Money::format($order->total_cents).'). '
                 .($cancel ? 'OS cancelada.' : 'Orçamento em revisão.')
@@ -198,6 +203,7 @@ class ServiceOrderManager
             $order->status = $status;
             $this->applyStatusTimestamps($order, $status, $from);
             $order->save();
+            $this->syncStockWithStatus($order, $from, $status, $actor);
 
             $description = $from->isFinal() && ! $status->isFinal()
                 ? "OS reaberta: {$from->label()} → {$status->label()}."
@@ -230,6 +236,25 @@ class ServiceOrderManager
             $this->record($order, $actor, $done ? 'item_done' : 'item_undone', $done
                 ? "Serviço concluído: {$item->name}."
                 : "Serviço marcado como pendente novamente: {$item->name}.");
+
+            return $item;
+        });
+    }
+
+    /** Define (ou remove) o mecânico responsável pelo serviço. */
+    public function assignMechanic(ServiceOrder $order, ServiceOrderItem $item, ?User $mechanic, User $actor): ServiceOrderItem
+    {
+        if ($item->mechanic_id === $mechanic?->id) {
+            return $item;
+        }
+
+        return DB::transaction(function () use ($order, $item, $mechanic, $actor) {
+            $item->mechanic_id = $mechanic?->id;
+            $item->save();
+
+            $this->record($order, $actor, 'item_assigned', $mechanic
+                ? "Serviço atribuído a {$mechanic->name}: {$item->name}."
+                : "Serviço sem responsável: {$item->name}.");
 
             return $item;
         });
@@ -276,20 +301,29 @@ class ServiceOrderManager
     /**
      * Peça necessária para o serviço (valor definido depois, no orçamento).
      *
-     * @param  array{name: string, part_number?: string|null, quantity: float|string, unit_price_cents?: int|null}  $data
+     * Peça do estoque (part_id): nome, código e preço de venda vêm do catálogo quando não
+     * informados, e a quantidade sai do estoque.
+     *
+     * @param  array{part_id?: int|null, name?: string|null, part_number?: string|null, quantity: float|string, unit_price_cents?: int|null}  $data
      */
     public function addPart(ServiceOrder $order, array $data, User $actor): ServiceOrderPart
     {
         $this->ensureEditable($order);
 
         return DB::transaction(function () use ($order, $data, $actor) {
+            $catalog = empty($data['part_id']) ? null : Part::findOrFail($data['part_id']);
+
             $part = $order->parts()->create([
-                'name' => $data['name'],
-                'part_number' => $data['part_number'] ?? null,
+                'part_id' => $catalog?->id,
+                'name' => ($data['name'] ?? null) ?: $catalog?->name,
+                'part_number' => ($data['part_number'] ?? null) ?: $catalog?->part_number,
                 'quantity' => $data['quantity'],
-                'unit_price_cents' => $data['unit_price_cents'] ?? null,
+                'unit_price_cents' => $data['unit_price_cents'] ?? $catalog?->price_cents,
                 'position' => (int) $order->parts()->max('position') + 1,
             ]);
+            if ($catalog) {
+                $this->stock->forOrder($catalog, (float) $part->quantity, $order, $actor);
+            }
             $this->recalculateTotals($order);
             $this->record($order, $actor, 'part_added', 'Peça adicionada: '.$this->describePart($part).'.');
 
@@ -303,6 +337,7 @@ class ServiceOrderManager
 
         DB::transaction(function () use ($order, $part, $actor) {
             $part->delete();
+            $this->returnToStock($order, $part, $actor);
             $this->recalculateTotals($order);
             $this->record($order, $actor, 'part_removed', 'Peça removida: '.$this->describePart($part).'.');
         });
@@ -374,9 +409,24 @@ class ServiceOrderManager
             }
 
             if (! empty($partData['id'])) {
-                $part = tap($order->parts()->findOrFail($partData['id']))->update($attributes);
+                $part = $order->parts()->findOrFail($partData['id']);
+                $previousQuantity = (float) $part->quantity;
+                $part->update($attributes);
+
+                // Mudou a quantidade de uma peça do estoque: baixa/devolve só a diferença
+                if ($part->part_id && $part->catalogPart) {
+                    $this->stock->forOrder($part->catalogPart, (float) $part->quantity - $previousQuantity, $order, $actor);
+                }
             } else {
-                $part = $order->parts()->create(['unit_price_cents' => null, ...$attributes]);
+                $catalog = empty($partData['part_id']) ? null : Part::findOrFail($partData['part_id']);
+                $part = $order->parts()->create([
+                    'unit_price_cents' => $catalog?->price_cents,
+                    ...$attributes,
+                    'part_id' => $catalog?->id,
+                ]);
+                if ($catalog) {
+                    $this->stock->forOrder($catalog, (float) $part->quantity, $order, $actor);
+                }
                 if ($logChanges) {
                     $this->record($order, $actor, 'part_added', 'Peça adicionada: '.$this->describePart($part).'.');
                 }
@@ -387,8 +437,33 @@ class ServiceOrderManager
 
         foreach ($order->parts()->whereNotIn('id', $keptIds)->get() as $part) {
             $part->delete();
+            $this->returnToStock($order, $part, $actor);
             if ($logChanges) {
                 $this->record($order, $actor, 'part_removed', 'Peça removida: '.$this->describePart($part).'.');
+            }
+        }
+    }
+
+    /** Peça do estoque saiu da OS: a quantidade volta para o estoque. */
+    private function returnToStock(ServiceOrder $order, ServiceOrderPart $part, ?User $actor): void
+    {
+        if ($part->part_id && $part->catalogPart) {
+            $this->stock->forOrder($part->catalogPart, -(float) $part->quantity, $order, $actor);
+        }
+    }
+
+    /** OS cancelada devolve as peças do estoque; reaberta, dá baixa de novo. */
+    private function syncStockWithStatus(ServiceOrder $order, ServiceOrderStatus $from, ServiceOrderStatus $to, ?User $actor): void
+    {
+        $canceled = ServiceOrderStatus::Canceled;
+        if (($from === $canceled) === ($to === $canceled)) {
+            return;
+        }
+
+        $sign = $to === $canceled ? -1 : 1;
+        foreach ($order->parts()->whereNotNull('part_id')->with('catalogPart')->get() as $part) {
+            if ($part->catalogPart) {
+                $this->stock->forOrder($part->catalogPart, $sign * (float) $part->quantity, $order, $actor);
             }
         }
     }

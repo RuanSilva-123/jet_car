@@ -34,6 +34,12 @@ class AppServiceProvider extends ServiceProvider
         // Dados da oficina (cabeçalho dos PDFs): só o master altera
         Gate::define('manage-settings', fn (User $user) => $user->isMaster());
 
+        // Financeiro (pagamentos, contas a receber, relatórios): toda a equipe, menos o mecânico
+        Gate::define('manage-finance', fn (User $user) => $user->canManageFinance());
+
+        // Remover um recebimento já lançado (estorno): só o master
+        Gate::define('delete-payment', fn (User $user) => $user->isMaster());
+
         // Regra padrão de senha das contas do painel
         Password::defaults(fn () => Password::min(8)->letters()->numbers());
     }

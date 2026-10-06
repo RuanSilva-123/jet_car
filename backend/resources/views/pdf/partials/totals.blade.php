@@ -25,6 +25,16 @@
                     <td>Total</td>
                     <td class="value">{{ Money::format($order->total_cents) }}</td>
                 </tr>
+                @if (($showPayments ?? false) && $order->paid_cents > 0)
+                    <tr>
+                        <td>Pago</td>
+                        <td class="value">{{ Money::format($order->paid_cents) }}</td>
+                    </tr>
+                    <tr class="{{ $order->balanceCents() > 0 ? 'balance' : 'paid' }}">
+                        <td>{{ $order->balanceCents() > 0 ? 'Saldo a pagar' : 'Situação' }}</td>
+                        <td class="value">{{ $order->balanceCents() > 0 ? Money::format($order->balanceCents()) : 'Quitado' }}</td>
+                    </tr>
+                @endif
             </table>
             @if ($order->unpricedCount() > 0)
                 <p class="totals-note">Itens "a definir" não estão incluídos no total.</p>

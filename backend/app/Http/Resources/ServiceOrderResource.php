@@ -11,6 +11,9 @@ use Illuminate\Http\Resources\Json\JsonResource;
  */
 class ServiceOrderResource extends JsonResource
 {
+    /** Relações carregadas no detalhe da OS. */
+    public const DETAIL_RELATIONS = ['customer', 'vehicle', 'creator', 'items.doneBy', 'items.mechanic', 'parts', 'payments.receiver', 'events.user'];
+
     /**
      * @return array<string, mixed>
      */
@@ -39,6 +42,10 @@ class ServiceOrderResource extends JsonResource
             'parts_total_cents' => $this->parts_total_cents,
             'discount_cents' => $this->discount_cents,
             'total_cents' => $this->total_cents,
+            'paid_cents' => $this->paid_cents,
+            'balance_cents' => $this->balanceCents(),
+            'payment_status' => $this->paymentStatus()->value,
+            'payment_status_label' => $this->paymentStatus()->label(),
             'budget_sent_at' => $this->budget_sent_at?->toIso8601String(),
             'budget_approved_at' => $this->budget_approved_at?->toIso8601String(),
             'budget_approved_total_cents' => $this->budget_approved_total_cents,
@@ -77,14 +84,27 @@ class ServiceOrderResource extends JsonResource
                 'is_done' => $item->is_done,
                 'done_at' => $item->done_at?->toIso8601String(),
                 'done_by' => $item->relationLoaded('doneBy') ? $item->doneBy?->name : null,
+                'mechanic_id' => $item->mechanic_id,
+                'mechanic' => $item->relationLoaded('mechanic') ? $item->mechanic?->name : null,
             ])),
             'parts' => $this->whenLoaded('parts', fn () => $this->parts->map(fn ($part) => [
                 'id' => $part->id,
+                'part_id' => $part->part_id,
                 'name' => $part->name,
                 'part_number' => $part->part_number,
                 'quantity' => (float) $part->quantity,
                 'unit_price_cents' => $part->unit_price_cents,
                 'total_cents' => $part->totalCents(),
+            ])),
+            'payments' => $this->whenLoaded('payments', fn () => $this->payments->map(fn ($payment) => [
+                'id' => $payment->id,
+                'method' => $payment->method->value,
+                'method_label' => $payment->method->label(),
+                'amount_cents' => $payment->amount_cents,
+                'installments' => $payment->installments,
+                'paid_at' => $payment->paid_at->toDateString(),
+                'notes' => $payment->notes,
+                'received_by' => $payment->relationLoaded('receiver') ? $payment->receiver?->name : null,
             ])),
             'events' => $this->whenLoaded('events', fn () => $this->events->map(fn ($event) => [
                 'id' => $event->id,

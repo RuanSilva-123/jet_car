@@ -100,6 +100,8 @@ class SaveServiceOrderRequest extends FormRequest
                 'nullable', 'integer',
                 Rule::exists('service_order_parts', 'id')->where('service_order_id', $order?->id ?? 0),
             ],
+            // Peça do estoque (só vale para linha nova; a linha existente mantém a origem)
+            'parts.*.part_id' => ['nullable', 'integer', Rule::exists('parts', 'id')->whereNull('deleted_at')],
             'parts.*.name' => ['required', 'string', 'max:150'],
             'parts.*.part_number' => ['nullable', 'string', 'max:60'],
             'parts.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999'],
@@ -143,6 +145,7 @@ class SaveServiceOrderRequest extends FormRequest
             'items.*.price_cents.*' => 'Valor da mão de obra inválido.',
             'parts.max' => 'Máximo de 100 peças por OS.',
             'parts.*.id.exists' => 'Peça não pertence a esta OS.',
+            'parts.*.part_id.exists' => 'Peça não encontrada no estoque.',
             'parts.*.name.required' => 'Informe o nome da peça.',
             'parts.*.quantity.required' => 'Informe a quantidade.',
             'parts.*.quantity.gt' => 'Quantidade deve ser maior que zero.',
