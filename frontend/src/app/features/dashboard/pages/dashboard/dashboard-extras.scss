@@ -1,34 +1,206 @@
-// Satisfação (NPS) e contas a pagar
-
+// Tons (ícones, contadores) — cores de estado, sempre com texto ao lado
 .tone-danger {
   --tone: var(--color-danger);
   --tone-soft: var(--color-danger-soft);
 }
 
+.tone-warning {
+  --tone: var(--color-warning);
+  --tone-soft: var(--color-warning-soft);
+}
+
+.tone-success {
+  --tone: var(--color-success);
+  --tone-soft: var(--color-success-soft);
+}
+
+// Na oficina agora: barras de um tom só (quantidade por status)
+.bars {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  padding: 0 12px 14px;
+  list-style: none;
+
+  a {
+    display: grid;
+    grid-template-columns: minmax(0, 178px) minmax(40px, 1fr) 28px;
+    align-items: center;
+    gap: 12px;
+    padding: 7px 8px;
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+
+    &:hover {
+      background: var(--color-hover);
+    }
+  }
+
+  &__label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    overflow: hidden;
+    font-size: 13px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+
+    app-icon {
+      color: var(--color-text-muted);
+    }
+  }
+
+  &__track {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: var(--color-neutral-soft);
+
+    span {
+      display: block;
+      height: 100%;
+      border-radius: 999px;
+      background: var(--color-ink);
+    }
+  }
+
+  strong {
+    font-family: var(--font-display);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+  }
+
+  .is-zero {
+    strong,
+    .bars__label {
+      color: var(--color-text-muted);
+    }
+  }
+}
+
+// Agenda do dia
+.agenda {
+  display: grid;
+  margin: 0;
+  padding: 0 12px 12px;
+  list-style: none;
+
+  a {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 9px 8px;
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+
+    &:hover {
+      background: var(--color-hover);
+    }
+  }
+
+  time {
+    flex: none;
+    width: 52px;
+    padding: 4px 0;
+    border-radius: 8px;
+    background: var(--color-neutral-soft);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+}
+
+// Caixa e contas
+.figures {
+  display: grid;
+  margin: 0;
+  padding: 0 12px 12px;
+
+  > div,
+  > a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 8px;
+    border-radius: var(--radius-md);
+    color: var(--color-text);
+  }
+
+  > a:hover {
+    background: var(--color-hover);
+  }
+
+  &__balance {
+    margin: 0 0 6px;
+    padding: 14px !important;
+    background: var(--color-hover);
+
+    dd {
+      font-size: 20px !important;
+    }
+  }
+
+  dt {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+
+    small {
+      min-width: 20px;
+      padding: 0 6px;
+      border-radius: 999px;
+      background: var(--color-neutral-soft);
+      color: var(--color-text-muted);
+      font-size: 11px;
+      font-weight: 700;
+      text-align: center;
+    }
+  }
+
+  dd {
+    margin: 0;
+    font-family: var(--font-display);
+    font-size: 15px;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+
+  .danger {
+    color: var(--color-danger);
+
+    &.figures__balance {
+      background: var(--color-danger-soft);
+    }
+  }
+}
+
+// Satisfação (NPS)
 .nps {
   display: flex;
   align-items: center;
-  gap: 14px;
-  margin: 4px 0 8px;
+  gap: 18px;
+  padding: 0 20px 8px;
 
   &__score {
     display: grid;
     flex: none;
     justify-items: center;
-    min-width: 92px;
-    padding: 10px 12px;
+    min-width: 108px;
+    padding: 12px 14px;
     border-radius: var(--radius-md);
     background: var(--tone-soft);
     color: var(--tone);
 
     strong {
       font-family: var(--font-display);
-      font-size: 30px;
+      font-size: 34px;
       line-height: 1;
     }
 
     span {
-      margin-top: 4px;
+      margin-top: 6px;
       font-size: 11px;
       font-weight: 600;
       white-space: nowrap;
@@ -38,18 +210,14 @@
   &__detail {
     display: grid;
     flex: 1;
-    gap: 6px;
+    gap: 10px;
     min-width: 0;
-
-    small {
-      color: var(--color-text-muted);
-      font-size: 12px;
-    }
   }
 
   &__bar {
     display: flex;
-    height: 8px;
+    gap: 2px;
+    height: 10px;
     overflow: hidden;
     border-radius: 999px;
     background: var(--color-neutral-soft);
@@ -57,37 +225,41 @@
     span {
       flex-basis: 0;
     }
+  }
 
-    .promoters {
-      background: var(--color-success);
+  &__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 14px;
+    margin: 0;
+    padding: 0;
+    color: var(--color-text);
+    font-size: 12px;
+    list-style: none;
+
+    li {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
     }
 
-    .passives {
-      background: var(--color-warning);
-    }
-
-    .detractors {
-      background: var(--color-danger);
+    i {
+      width: 8px;
+      height: 8px;
+      border-radius: 2px;
     }
   }
 
-  &__foot {
-    display: grid;
-    gap: 2px;
-    margin-top: 4px;
-    color: var(--color-text-muted);
-    font-size: 12px;
+  .promoters {
+    background: var(--color-success);
+  }
 
-    &:empty {
-      display: none;
-    }
+  .passives {
+    background: var(--color-warning);
+  }
 
-    .danger {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      color: var(--color-danger);
-    }
+  .detractors {
+    background: var(--color-danger);
   }
 }
 
@@ -95,9 +267,9 @@
   display: grid;
   flex: none;
   place-items: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
@@ -115,51 +287,5 @@
   &--detractor {
     background: var(--color-danger-soft);
     color: var(--color-danger);
-  }
-}
-
-.payables {
-  display: grid;
-  gap: 2px;
-  margin: 4px 0;
-
-  > div {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    padding: 8px 10px;
-    border-radius: var(--radius-md);
-    color: var(--color-text);
-
-    &.danger {
-      background: var(--color-danger-soft);
-      color: var(--color-danger);
-    }
-  }
-
-  &__balance {
-    margin-top: 4px;
-    border-top: 1px solid var(--color-border);
-    border-radius: 0 !important;
-  }
-
-  span {
-    display: grid;
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  small {
-    color: var(--color-text-muted);
-    font-size: 12px;
-    font-weight: 400;
-  }
-
-  strong {
-    font-family: var(--font-display);
-    font-size: 16px;
-    font-variant-numeric: tabular-nums;
-    white-space: nowrap;
   }
 }

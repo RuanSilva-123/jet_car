@@ -4,8 +4,8 @@ import { RouterLink } from '@angular/router';
 import { finalize } from 'rxjs';
 
 import { AuthService } from '../../../../core/auth/services/auth.service';
+import { BarChart, BarDatum } from '../../../../shared/components/bar-chart/bar-chart';
 import { Icon } from '../../../../shared/components/icon/icon';
-import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { formatMoney, formatPlate } from '../../../../shared/utils/br-format';
 import { formatStock } from '../../../parts/models/part';
@@ -14,10 +14,18 @@ import { DashboardData, DashboardOrder, DashboardService } from '../../services/
 
 const BUDGET_DAYS_KEY = 'jetcar.dashboard.budgetDays';
 
+type AttentionTab = 'overdue' | 'budgets' | 'pickup';
+
+/** Eixo do gráfico: "R$ 1,2 mil", "R$ 800". */
+function compactMoney(cents: number): string {
+  const reais = cents / 100;
+  return reais >= 1000 ? `R$ ${(reais / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mil` : `R$ ${Math.round(reais)}`;
+}
+
 /** Visão geral da oficina: o que está em andamento, o que precisa de ação hoje e os números do mês. */
 @Component({
   selector: 'app-dashboard',
-  imports: [DatePipe, RouterLink, Icon, BrFormatPipe, MoneyPipe],
+  imports: [DatePipe, RouterLink, Icon, BarChart, MoneyPipe],
   templateUrl: './dashboard.html',
   styleUrls: ['./dashboard.scss', './dashboard-extras.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -36,6 +44,10 @@ export class Dashboard implements OnInit {
     if (hour < 18) return 'Boa tarde';
     return 'Boa noite';
   })();
+
+  /** "terça-feira, 6 de outubro" */
+  protected readonly todayLabel = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  protected readonly formatTick = compactMoney;
 
   protected readonly data = signal<DashboardData | null>(null);
   protected readonly loading = signal(true);
@@ -73,8 +85,71 @@ export class Dashboard implements OnInit {
     return { label: 'Crítico', tone: 'danger' };
   });
 
+  /** Faturamento dos últimos 30 dias no gráfico de colunas. */
+  protected readonly revenueChart = computed<BarDatum[]>(() =>
+    (this.data()?.finance?.daily ?? []).map((day) => {
+      const [, month, date] = day.date.split('-');
+      return {
+        label: `${date}/${month}`,
+        title: new Date(`${day.date}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+        value: day.revenue_cents,
+        display: formatMoney(day.revenue_cents),
+        detail: `${day.orders} ${day.orders === 1 ? 'OS entregue' : 'OS entregues'} · recebido ${formatMoney(day.received_cents)}`,
+      };
+    }),
+  );
+
+  protected readonly revenue30 = computed(() => {
+    const daily = this.data()?.finance?.daily ?? [];
+    return {
+      total: daily.reduce((sum, day) => sum + day.revenue_cents, 0),
+      orders: daily.reduce((sum, day) => sum + day.orders, 0),
+      received: daily.reduce((sum, day) => sum + day.received_cents, 0),
+    };
+  });
+
+  /** Mês anterior por extenso, para a comparação do faturamento. */
+  protected readonly previousMonth = computed(() => {
+    const month = this.data()?.finance?.month;
+    if (!month) return '';
+    const [year, number] = month.split('-').map(Number);
+    return new Date(year, number - 2, 1).toLocaleDateString('pt-BR', { month: 'long' });
+  });
+
+  /** OS na oficina por status, com a barra proporcional ao maior. */
+  protected readonly workshop = computed(() => {
+    const counts = this.data()?.status_counts ?? [];
+    const max = Math.max(1, ...counts.map((item) => item.count));
+    return counts.map((item) => ({ ...item, meta: STATUS_META[item.status], width: (item.count / max) * 100 }));
+  });
+
+  // "Precisa de atenção": abas com as três listas de ação
+  private readonly chosenTab = signal<AttentionTab | null>(null);
+  protected readonly attentionTabs = computed(() => {
+    const d = this.data();
+    return [
+      { key: 'overdue' as const, label: 'Atrasadas', count: d?.overdue.count ?? 0, tone: 'danger' },
+      { key: 'budgets' as const, label: 'Orçamentos sem resposta', count: d?.stale_budgets.count ?? 0, tone: 'warning' },
+      { key: 'pickup' as const, label: 'Prontos para retirada', count: d?.ready_for_pickup.count ?? 0, tone: 'success' },
+    ];
+  });
+  /** Aba aberta: a escolhida ou a primeira com pendências. */
+  protected readonly attentionTab = computed<AttentionTab>(
+    () => this.chosenTab() ?? this.attentionTabs().find((tab) => tab.count > 0)?.key ?? 'overdue',
+  );
+  protected readonly attentionTotal = computed(() => this.attentionTabs().reduce((sum, tab) => sum + tab.count, 0));
+
+  protected readonly alertsCount = computed(() => {
+    const d = this.data();
+    return d ? d.low_stock.count + d.reminders_pending : 0;
+  });
+
   ngOnInit(): void {
     this.load();
+  }
+
+  protected selectTab(tab: AttentionTab): void {
+    this.chosenTab.set(tab);
   }
 
   protected setBudgetDays(value: number): void {

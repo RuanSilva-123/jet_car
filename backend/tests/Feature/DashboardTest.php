@@ -58,6 +58,14 @@ class DashboardTest extends TestCase
             ->assertJsonPath('data.finance.average_ticket_cents', 20000)
             ->assertJsonPath('data.finance.previous_revenue_cents', 50000)
             ->assertJsonPath('data.finance.receivable_cents', 90000)
+            // Últimos 30 dias, de 21/09 a hoje, com os dias vazios zerados
+            ->assertJsonCount(30, 'data.finance.daily')
+            ->assertJsonPath('data.finance.daily.0.date', '2026-09-21')
+            ->assertJsonPath('data.finance.daily.29.date', '2026-10-20')
+            ->assertJsonPath('data.finance.daily.19.date', '2026-10-10')
+            ->assertJsonPath('data.finance.daily.19.revenue_cents', 10000)
+            ->assertJsonPath('data.finance.daily.19.orders', 1)
+            ->assertJsonPath('data.finance.daily.20.revenue_cents', 0)
             ->assertJsonPath('data.appointments_today.count', 1)
             ->assertJsonPath('data.low_stock.count', 1);
 

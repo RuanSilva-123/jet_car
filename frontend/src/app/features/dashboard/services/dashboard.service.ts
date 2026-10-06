@@ -43,6 +43,8 @@ export interface DashboardData {
     bills_due_soon_count: number;
     bills_due_soon_cents: number;
     cash_balance_cents: number;
+    /** Últimos 30 dias (fuso da oficina), dias sem movimento zerados. */
+    daily: { date: string; revenue_cents: number; orders: number; received_cents: number }[];
   } | null;
   /** Pesquisa de satisfação dos últimos 90 dias (NPS = % promotores − % detratores). */
   satisfaction: {

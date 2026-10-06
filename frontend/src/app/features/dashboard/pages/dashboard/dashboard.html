@@ -1,21 +1,21 @@
 <section class="page-header">
   <div>
     <h1>{{ greeting }}, {{ firstName() }}</h1>
-    <p>
-      Visão geral da oficina
+    <p class="today">
+      {{ todayLabel }}
       @if (data(); as data) {
-        · atualizado às {{ data.generated_at | date: 'HH:mm' }}
+        <span class="dot" aria-hidden="true">·</span> atualizado às {{ data.generated_at | date: 'HH:mm' }}
       }
     </p>
   </div>
   <div class="header-actions">
-    <button type="button" class="btn btn--ghost" (click)="load()" [disabled]="loading()">
+    <button type="button" class="btn btn--ghost" (click)="load()" [disabled]="loading()" title="Atualizar os números">
       @if (loading()) {
         <span class="spinner spinner--dark"></span>
       } @else {
         <app-icon name="refresh" [size]="16" />
       }
-      Atualizar
+      <span class="hide-sm">Atualizar</span>
     </button>
     <a routerLink="/service-orders/new" class="btn btn--primary"><app-icon name="plus" [size]="16" /> Nova OS</a>
   </div>
@@ -32,6 +32,7 @@
 } @else {
   @let d = data()!;
 
+  <!-- Avisos que pedem ação -->
   @if (backupAlert(); as message) {
     <div class="banner banner--danger">
       <app-icon name="database" />
@@ -39,275 +40,378 @@
       <a routerLink="/settings/shop" class="btn btn--sm btn--ghost">Ver detalhes</a>
     </div>
   }
+  @if (d.finance && d.finance.bills_overdue_count > 0) {
+    <div class="banner banner--warning">
+      <app-icon name="receipt" />
+      <span>
+        {{ d.finance.bills_overdue_count === 1 ? '1 conta vencida' : d.finance.bills_overdue_count + ' contas vencidas' }}
+        somando {{ d.finance.bills_overdue_cents | money }}.
+      </span>
+      <a routerLink="/finance/bills" [queryParams]="{ status: 'overdue' }" class="btn btn--sm btn--ghost">Ver contas</a>
+    </div>
+  }
 
-  <!-- Números do mês (financeiro) -->
+  <!-- Números do mês -->
   @if (d.finance; as finance) {
-    <div class="kpis">
-      <article class="kpi kpi--hero">
-        <span class="kpi__label">Faturamento de {{ finance.month + '-01T12:00:00' | date: 'MMMM' }}</span>
-        <strong class="kpi__value">{{ finance.revenue_cents | money }}</strong>
+    <section class="card summary" aria-label="Números do mês">
+      <div class="summary__item summary__item--lead">
+        <span class="summary__label">Faturamento de {{ finance.month + '-01T12:00:00' | date: 'MMMM' }}</span>
+        <strong class="summary__value">{{ finance.revenue_cents | money }}</strong>
         <small>
           @if (revenueTrend() !== null) {
             <span class="trend" [class.trend--up]="revenueTrend()! >= 0" [class.trend--down]="revenueTrend()! < 0">
-              <app-icon [name]="revenueTrend()! >= 0 ? 'trending-up' : 'trending-down'" [size]="13" />
+              <app-icon [name]="revenueTrend()! >= 0 ? 'trending-up' : 'trending-down'" [size]="12" />
               {{ revenueTrend()! >= 0 ? '+' : '' }}{{ revenueTrend() }}%
             </span>
-            vs. mesmo período do mês passado
+            vs. mesmo período de {{ previousMonth() }}
           } @else {
             OS entregues no mês
           }
         </small>
-      </article>
-      <article class="kpi">
-        <span class="kpi__label">Ticket médio</span>
-        <strong class="kpi__value">{{ finance.average_ticket_cents | money }}</strong>
+      </div>
+      <div class="summary__item">
+        <span class="summary__label">Ticket médio</span>
+        <strong class="summary__value">{{ finance.average_ticket_cents | money }}</strong>
         <small>{{ finance.delivered_count }} {{ finance.delivered_count === 1 ? 'OS entregue' : 'OS entregues' }}</small>
-      </article>
-      <article class="kpi">
-        <span class="kpi__label">Recebido no mês</span>
-        <strong class="kpi__value">{{ finance.received_cents | money }}</strong>
+      </div>
+      <div class="summary__item">
+        <span class="summary__label">Recebido no mês</span>
+        <strong class="summary__value">{{ finance.received_cents | money }}</strong>
         <small>Pagamentos registrados</small>
-      </article>
-      <a class="kpi kpi--link" routerLink="/finance">
-        <span class="kpi__label">A receber</span>
-        <strong class="kpi__value" [class.is-alert]="finance.receivable_cents > 0">{{ finance.receivable_cents | money }}</strong>
-        <small>{{ finance.receivable_count }} {{ finance.receivable_count === 1 ? 'OS com saldo' : 'OS com saldo' }} <app-icon name="arrow-right" [size]="12" /></small>
+      </div>
+      <a class="summary__item summary__item--link" routerLink="/finance">
+        <span class="summary__label">A receber</span>
+        <strong class="summary__value" [class.is-alert]="finance.receivable_cents > 0">{{ finance.receivable_cents | money }}</strong>
+        <small>{{ finance.receivable_count }} OS com saldo <app-icon name="arrow-right" [size]="12" /></small>
       </a>
-    </div>
+    </section>
   }
 
-  <!-- OS por status -->
-  <article class="card pipeline">
-    <header class="card__header card__header--row">
-      <div>
-        <h2>OS em aberto</h2>
-        <p>{{ d.active_total }} {{ d.active_total === 1 ? 'ordem de serviço' : 'ordens de serviço' }} na oficina</p>
-      </div>
-      <a routerLink="/service-orders" class="link-button">Ver todas</a>
-    </header>
-    <div class="pipeline__steps">
-      @for (item of d.status_counts; track item.status) {
-        <a routerLink="/service-orders" class="step tone-{{ statusMeta[item.status].tone }}" [class.is-zero]="item.count === 0">
-          <span class="step__icon"><app-icon [name]="statusMeta[item.status].icon" [size]="16" /></span>
-          <strong>{{ item.count }}</strong>
-          <span>{{ item.label }}</span>
-        </a>
-      }
-    </div>
-  </article>
-
-  <div class="panels">
-    <!-- Satisfação (NPS) -->
-    <article class="card panel nps-panel">
-      <header class="panel__header">
-        <span class="panel__icon panel__icon--success"><app-icon name="smile" [size]="16" /></span>
-        <h2>Satisfação dos clientes</h2>
-        <span class="panel__count" title="Respostas nos últimos {{ d.satisfaction.days }} dias">{{ d.satisfaction.responses }}</span>
-      </header>
-      @if (d.satisfaction.nps !== null) {
-        <div class="nps">
-          <div class="nps__score tone-{{ npsZone()?.tone }}">
-            <strong>{{ d.satisfaction.nps }}</strong>
-            <span>NPS · {{ npsZone()?.label }}</span>
-          </div>
-          <div class="nps__detail">
-            <div class="nps__bar" [attr.aria-label]="d.satisfaction.promoters + ' promotores, ' + d.satisfaction.passives + ' neutros, ' + d.satisfaction.detractors + ' detratores'">
-              <span class="promoters" [style.flex-grow]="d.satisfaction.promoters"></span>
-              <span class="passives" [style.flex-grow]="d.satisfaction.passives"></span>
-              <span class="detractors" [style.flex-grow]="d.satisfaction.detractors"></span>
+  <div class="board">
+    <div class="board__main">
+      <!-- Faturamento: últimos 30 dias -->
+      @if (d.finance) {
+        <article class="card box">
+          <header class="box__header">
+            <div>
+              <h2>Faturamento nos últimos 30 dias</h2>
+              <p>
+                {{ revenue30().total | money }} em {{ revenue30().orders }} {{ revenue30().orders === 1 ? 'OS entregue' : 'OS entregues' }}
+                · {{ revenue30().received | money }} recebidos
+              </p>
             </div>
-            <small>
-              {{ d.satisfaction.promoters }} promotores · {{ d.satisfaction.passives }} neutros · {{ d.satisfaction.detractors }} detratores ·
-              média {{ d.satisfaction.average }}
-            </small>
-          </div>
-        </div>
-        @for (answer of d.satisfaction.recent; track answer.id) {
-          <a class="row" [routerLink]="['/service-orders', answer.id]">
-            <span class="score-chip score-chip--{{ npsCategory(answer.score) }}">{{ answer.score }}</span>
-            <span class="row__text">
-              <strong>{{ answer.customer }}</strong>
-              <small>{{ answer.comment ? '“' + answer.comment + '”' : 'OS #' + answer.number + ' · sem comentário' }}</small>
-            </span>
-          </a>
-        }
-      } @else {
-        <p class="panel__empty">Nenhuma avaliação nos últimos {{ d.satisfaction.days }} dias. Envie a pesquisa pelo WhatsApp na OS entregue.</p>
+            <a routerLink="/reports" class="link-button">Relatórios</a>
+          </header>
+          @if (revenue30().total > 0) {
+            <div class="box__chart">
+              <app-bar-chart [data]="revenueChart()" [formatTick]="formatTick" ariaLabel="Faturamento por dia nos últimos 30 dias" />
+            </div>
+          } @else {
+            <div class="box__empty box__empty--tall">
+              <app-icon name="bar-chart" [size]="22" />
+              <strong>Nenhuma OS entregue nos últimos 30 dias</strong>
+              <span>O gráfico aparece assim que a primeira OS for entregue.</span>
+            </div>
+          }
+        </article>
       }
-      <p class="nps__foot">
-        @if (d.satisfaction.awaiting) {
-          <span>{{ d.satisfaction.awaiting }} {{ d.satisfaction.awaiting === 1 ? 'entrega recente sem avaliação' : 'entregas recentes sem avaliação' }}</span>
-        }
-        @if (d.warranty_returns_month) {
-          <span class="danger"><app-icon name="shield" [size]="12" /> {{ d.warranty_returns_month }} {{ d.warranty_returns_month === 1 ? 'retorno em garantia' : 'retornos em garantia' }} no mês</span>
-        }
-      </p>
-      @if (canManageFinance()) {
-        <a routerLink="/reports" [queryParams]="{ report: 'satisfaction' }" class="panel__more">Ver avaliações <app-icon name="arrow-right" [size]="12" /></a>
-      }
-    </article>
 
-    <!-- Contas a pagar -->
-    @if (d.finance; as finance) {
-      <a class="card panel panel--link" routerLink="/finance/bills" [class.is-alert]="finance.bills_overdue_count > 0">
-        <header class="panel__header">
-          <span class="panel__icon" [class.panel__icon--danger]="finance.bills_overdue_count > 0"><app-icon name="receipt" [size]="16" /></span>
-          <h2>Contas a pagar</h2>
-          <span class="panel__count">{{ finance.bills_overdue_count + finance.bills_due_soon_count }}</span>
-        </header>
-        <div class="payables">
-          <div [class.danger]="finance.bills_overdue_count > 0">
-            <span>Vencidas <small>{{ finance.bills_overdue_count }} conta(s)</small></span>
-            <strong>{{ finance.bills_overdue_cents | money }}</strong>
-          </div>
+      <!-- Precisa de atenção -->
+      <article class="card box">
+        <header class="box__header">
           <div>
-            <span>Vencem em 7 dias <small>{{ finance.bills_due_soon_count }} conta(s)</small></span>
-            <strong>{{ finance.bills_due_soon_cents | money }}</strong>
+            <h2>Precisa de atenção</h2>
+            <p>{{ attentionTotal() ? attentionTotal() + ' ' + (attentionTotal() === 1 ? 'item pede' : 'itens pedem') + ' uma ação' : 'Nada pendente agora' }}</p>
           </div>
-          <div class="payables__balance" [class.danger]="finance.cash_balance_cents < 0">
-            <span>Saldo em caixa <small>recebido − pago</small></span>
-            <strong>{{ finance.cash_balance_cents | money }}</strong>
-          </div>
+          @if (attentionTab() === 'budgets') {
+            <label class="days-filter">
+              <span>enviados há +</span>
+              <select (change)="setBudgetDays(+$any($event.target).value)" aria-label="Orçamentos enviados há mais de">
+                @for (days of [1, 2, 3, 5, 7, 15]; track days) {
+                  <option [value]="days" [selected]="days === budgetDays()">{{ days }} {{ days === 1 ? 'dia' : 'dias' }}</option>
+                }
+              </select>
+            </label>
+          }
+        </header>
+
+        <div class="tabs" role="tablist" aria-label="Pendências">
+          @for (tab of attentionTabs(); track tab.key) {
+            <button
+              type="button"
+              role="tab"
+              class="tab"
+              [class.is-active]="attentionTab() === tab.key"
+              [attr.aria-selected]="attentionTab() === tab.key"
+              (click)="selectTab(tab.key)"
+            >
+              {{ tab.label }}
+              <span class="tab__count tone-{{ tab.tone }}" [class.is-zero]="tab.count === 0">{{ tab.count }}</span>
+            </button>
+          }
         </div>
-        <span class="panel__more">Abrir contas a pagar <app-icon name="arrow-right" [size]="12" /></span>
-      </a>
-    }
 
-    <!-- Atrasadas -->
-    <article class="card panel" [class.is-alert]="d.overdue.count > 0">
-      <header class="panel__header">
-        <span class="panel__icon panel__icon--danger"><app-icon name="alert" [size]="16" /></span>
-        <h2>Atrasadas</h2>
-        <span class="panel__count">{{ d.overdue.count }}</span>
-      </header>
-      @for (order of d.overdue.items; track order.id) {
-        <a class="row" [routerLink]="['/service-orders', order.id]">
-          <span class="row__text">
-            <strong>#{{ order.number }} · {{ order.customer }}</strong>
-            <small>{{ order.vehicle }}{{ order.plate ? ' · ' + plate(order.plate) : '' }}</small>
-          </span>
-          <span class="row__meta danger">{{ daysSince(order.date) }}d de atraso</span>
-        </a>
-      } @empty {
-        <p class="panel__empty"><app-icon name="check" [size]="14" /> Nenhuma OS com previsão vencida.</p>
-      }
-      @if (d.overdue.count > d.overdue.items.length) {
-        <a routerLink="/service-orders" class="panel__more">+ {{ d.overdue.count - d.overdue.items.length }} atrasadas</a>
-      }
-    </article>
-
-    <!-- Orçamentos sem resposta -->
-    <article class="card panel">
-      <header class="panel__header">
-        <span class="panel__icon panel__icon--warning"><app-icon name="clock" [size]="16" /></span>
-        <h2>Orçamentos sem resposta</h2>
-        <span class="panel__count">{{ d.stale_budgets.count }}</span>
-        <label class="panel__filter">
-          <span class="sr-only">Enviados há mais de</span>
-          <select [value]="budgetDays()" (change)="setBudgetDays(+$any($event.target).value)" aria-label="Enviados há mais de">
-            @for (days of [1, 2, 3, 5, 7, 15]; track days) {
-              <option [value]="days" [selected]="days === budgetDays()">há +{{ days }} {{ days === 1 ? 'dia' : 'dias' }}</option>
+        <div class="list">
+          @switch (attentionTab()) {
+            @case ('overdue') {
+              @for (order of d.overdue.items; track order.id) {
+                <a class="item" [routerLink]="['/service-orders', order.id]">
+                  <span class="item__icon tone-danger"><app-icon name="alert" [size]="15" /></span>
+                  <span class="item__text">
+                    <strong>{{ order.vehicle }}{{ order.plate ? ' · ' + plate(order.plate) : '' }}</strong>
+                    <small>OS #{{ order.number }} · {{ order.customer }}</small>
+                  </span>
+                  <span class="item__meta danger">{{ daysSince(order.date) }}d de atraso</span>
+                </a>
+              } @empty {
+                <div class="box__empty"><app-icon name="check" [size]="18" /><span>Nenhuma OS com a previsão de entrega vencida.</span></div>
+              }
+              @if (d.overdue.count > d.overdue.items.length) {
+                <a routerLink="/service-orders" class="list__more">Ver mais {{ d.overdue.count - d.overdue.items.length }} atrasadas</a>
+              }
             }
-          </select>
-        </label>
-      </header>
-      @for (order of d.stale_budgets.items; track order.id) {
-        <div class="row">
-          <a class="row__text" [routerLink]="['/service-orders', order.id]">
-            <strong>#{{ order.number }} · {{ order.customer }}</strong>
-            <small>{{ order.total_cents | money }} · enviado há {{ daysSince(order.date) }}d</small>
-          </a>
-          @if (order.phone_is_whatsapp) {
-            <a class="btn btn--icon whatsapp" [href]="budgetFollowUp(order)" target="_blank" rel="noopener" title="Cobrar resposta pelo WhatsApp" aria-label="Cobrar resposta pelo WhatsApp">
-              <app-icon name="whatsapp" [size]="16" />
-            </a>
+            @case ('budgets') {
+              @for (order of d.stale_budgets.items; track order.id) {
+                <div class="item">
+                  <span class="item__icon tone-warning"><app-icon name="clock" [size]="15" /></span>
+                  <a class="item__text" [routerLink]="['/service-orders', order.id]">
+                    <strong>OS #{{ order.number }} · {{ order.customer }}</strong>
+                    <small>{{ order.vehicle }} · enviado há {{ daysSince(order.date) }}d</small>
+                  </a>
+                  <span class="item__meta">{{ order.total_cents | money }}</span>
+                  @if (order.phone_is_whatsapp) {
+                    <a class="btn btn--icon whatsapp" [href]="budgetFollowUp(order)" target="_blank" rel="noopener" title="Cobrar resposta pelo WhatsApp" aria-label="Cobrar resposta pelo WhatsApp">
+                      <app-icon name="whatsapp" [size]="16" />
+                    </a>
+                  }
+                </div>
+              } @empty {
+                <div class="box__empty">
+                  <app-icon name="check" [size]="18" />
+                  <span>Nenhum orçamento parado há mais de {{ d.budget_days }} {{ d.budget_days === 1 ? 'dia' : 'dias' }}.</span>
+                </div>
+              }
+            }
+            @case ('pickup') {
+              @for (order of d.ready_for_pickup.items; track order.id) {
+                <div class="item">
+                  <span class="item__icon tone-success"><app-icon name="car" [size]="15" /></span>
+                  <a class="item__text" [routerLink]="['/service-orders', order.id]">
+                    <strong>{{ order.vehicle }}{{ order.plate ? ' · ' + plate(order.plate) : '' }}</strong>
+                    <small>OS #{{ order.number }} · {{ order.customer }}</small>
+                  </a>
+                  <span class="item__meta">{{ daysSince(order.date) ? 'pronto há ' + daysSince(order.date) + 'd' : 'pronto hoje' }}</span>
+                  @if (order.phone_is_whatsapp) {
+                    <a class="btn btn--icon whatsapp" [href]="pickupNotice(order)" target="_blank" rel="noopener" title="Avisar o cliente pelo WhatsApp" aria-label="Avisar o cliente pelo WhatsApp">
+                      <app-icon name="whatsapp" [size]="16" />
+                    </a>
+                  }
+                </div>
+              } @empty {
+                <div class="box__empty"><app-icon name="check" [size]="18" /><span>Nenhum veículo esperando retirada.</span></div>
+              }
+            }
           }
         </div>
-      } @empty {
-        <p class="panel__empty"><app-icon name="check" [size]="14" /> Nenhum orçamento parado há mais de {{ d.budget_days }} {{ d.budget_days === 1 ? 'dia' : 'dias' }}.</p>
-      }
-    </article>
+      </article>
 
-    <!-- Prontos para retirada -->
-    <article class="card panel">
-      <header class="panel__header">
-        <span class="panel__icon panel__icon--success"><app-icon name="car" [size]="16" /></span>
-        <h2>Prontos para retirada</h2>
-        <span class="panel__count">{{ d.ready_for_pickup.count }}</span>
-      </header>
-      @for (order of d.ready_for_pickup.items; track order.id) {
-        <div class="row">
-          <a class="row__text" [routerLink]="['/service-orders', order.id]">
-            <strong>{{ order.vehicle }}{{ order.plate ? ' · ' + plate(order.plate) : '' }}</strong>
-            <small>#{{ order.number }} · {{ order.customer }} · pronto há {{ daysSince(order.date) }}d</small>
-          </a>
-          @if (order.phone_is_whatsapp) {
-            <a class="btn btn--icon whatsapp" [href]="pickupNotice(order)" target="_blank" rel="noopener" title="Avisar o cliente pelo WhatsApp" aria-label="Avisar o cliente pelo WhatsApp">
-              <app-icon name="whatsapp" [size]="16" />
-            </a>
+      <!-- Satisfação -->
+      <article class="card box">
+        <header class="box__header">
+          <div>
+            <h2>Satisfação dos clientes</h2>
+            <p>Últimos {{ d.satisfaction.days }} dias · {{ d.satisfaction.responses }} {{ d.satisfaction.responses === 1 ? 'avaliação' : 'avaliações' }}</p>
+          </div>
+          @if (canManageFinance()) {
+            <a routerLink="/reports" [queryParams]="{ report: 'satisfaction' }" class="link-button">Ver todas</a>
           }
-        </div>
-      } @empty {
-        <p class="panel__empty">Nenhum veículo esperando retirada.</p>
-      }
-    </article>
+        </header>
 
-    <!-- Agenda de hoje -->
-    <article class="card panel">
-      <header class="panel__header">
-        <span class="panel__icon"><app-icon name="calendar" [size]="16" /></span>
-        <h2>Agenda de hoje</h2>
-        <span class="panel__count">{{ d.appointments_today.count }}</span>
-      </header>
-      @for (item of d.appointments_today.items; track item.id) {
-        <a class="row" routerLink="/agenda">
-          <span class="row__time">{{ item.scheduled_at | date: 'HH:mm' }}</span>
-          <span class="row__text">
-            <strong>{{ item.customer }}</strong>
-            <small>{{ item.vehicle ?? 'Veículo a definir' }}{{ item.plate ? ' · ' + plate(item.plate) : '' }}</small>
-          </span>
-        </a>
-      } @empty {
-        <p class="panel__empty">Nenhum horário marcado para hoje.</p>
-      }
-      <a routerLink="/agenda" class="panel__more">Abrir agenda</a>
-    </article>
-
-    <!-- Estoque baixo -->
-    <article class="card panel">
-      <header class="panel__header">
-        <span class="panel__icon" [class.panel__icon--danger]="d.low_stock.count > 0"><app-icon name="boxes" [size]="16" /></span>
-        <h2>Estoque baixo</h2>
-        <span class="panel__count">{{ d.low_stock.count }}</span>
-      </header>
-      @for (part of d.low_stock.items; track part.id) {
-        <a class="row" routerLink="/parts">
-          <span class="row__text">
-            <strong>{{ part.name }}</strong>
-            <small>mínimo {{ part.min_stock | brFormat: 'quantity' }} {{ part.unit }}</small>
-          </span>
-          <span class="row__meta danger">{{ stock(part.stock_quantity) }} {{ part.unit }}</span>
-        </a>
-      } @empty {
-        <p class="panel__empty"><app-icon name="check" [size]="14" /> Estoque em dia.</p>
-      }
-    </article>
-
-    <!-- Lembretes -->
-    <a class="card panel panel--link" routerLink="/reminders">
-      <header class="panel__header">
-        <span class="panel__icon panel__icon--warning"><app-icon name="bell" [size]="16" /></span>
-        <h2>Lembretes de revisão</h2>
-        <span class="panel__count">{{ d.reminders_pending }}</span>
-      </header>
-      <p class="panel__empty">
-        @if (d.reminders_pending) {
-          {{ d.reminders_pending }} {{ d.reminders_pending === 1 ? 'cliente para contatar' : 'clientes para contatar' }} sobre revisão.
+        @if (d.satisfaction.nps !== null) {
+          <div class="nps">
+            <div class="nps__score tone-{{ npsZone()?.tone }}">
+              <strong>{{ d.satisfaction.nps }}</strong>
+              <span>NPS · {{ npsZone()?.label }}</span>
+            </div>
+            <div class="nps__detail">
+              <div class="nps__bar" role="img" [attr.aria-label]="d.satisfaction.promoters + ' promotores, ' + d.satisfaction.passives + ' neutros, ' + d.satisfaction.detractors + ' detratores'">
+                <span class="promoters" [style.flex-grow]="d.satisfaction.promoters"></span>
+                <span class="passives" [style.flex-grow]="d.satisfaction.passives"></span>
+                <span class="detractors" [style.flex-grow]="d.satisfaction.detractors"></span>
+              </div>
+              <ul class="nps__legend">
+                <li><i class="promoters"></i> {{ d.satisfaction.promoters }} promotores</li>
+                <li><i class="passives"></i> {{ d.satisfaction.passives }} neutros</li>
+                <li><i class="detractors"></i> {{ d.satisfaction.detractors }} detratores</li>
+                <li class="muted">média {{ d.satisfaction.average }}</li>
+              </ul>
+            </div>
+          </div>
+          <div class="list">
+            @for (answer of d.satisfaction.recent; track answer.id) {
+              <a class="item" [routerLink]="['/service-orders', answer.id]">
+                <span class="score-chip score-chip--{{ npsCategory(answer.score) }}">{{ answer.score }}</span>
+                <span class="item__text">
+                  <strong>{{ answer.customer }}</strong>
+                  <small>{{ answer.comment ? '“' + answer.comment + '”' : 'OS #' + answer.number + ' · sem comentário' }}</small>
+                </span>
+                <span class="item__meta">{{ answer.answered_at | date: 'dd/MM' }}</span>
+              </a>
+            }
+          </div>
         } @else {
-          Ninguém para contatar agora.
+          <div class="box__empty">
+            <app-icon name="smile" [size]="18" />
+            <span>Nenhuma avaliação ainda. Na OS entregue, use “Pedir avaliação pelo WhatsApp”.</span>
+          </div>
         }
-      </p>
-      <span class="panel__more">Ver lista <app-icon name="arrow-right" [size]="12" /></span>
-    </a>
+
+        @if (d.satisfaction.awaiting || d.warranty_returns_month) {
+          <footer class="box__footer">
+            @if (d.satisfaction.awaiting) {
+              <span>
+                <app-icon name="message" [size]="13" />
+                {{ d.satisfaction.awaiting }} {{ d.satisfaction.awaiting === 1 ? 'entrega recente sem avaliação' : 'entregas recentes sem avaliação' }}
+              </span>
+            }
+            @if (d.warranty_returns_month) {
+              <span class="danger">
+                <app-icon name="shield" [size]="13" />
+                {{ d.warranty_returns_month }} {{ d.warranty_returns_month === 1 ? 'retorno em garantia' : 'retornos em garantia' }} no mês
+              </span>
+            }
+          </footer>
+        }
+      </article>
+    </div>
+
+    <aside class="board__side">
+      <!-- Na oficina agora -->
+      <article class="card box">
+        <header class="box__header">
+          <div>
+            <h2>Na oficina agora</h2>
+            <p>{{ d.active_total }} {{ d.active_total === 1 ? 'ordem de serviço aberta' : 'ordens de serviço abertas' }}</p>
+          </div>
+          <a routerLink="/service-orders" class="link-button">Ver OS</a>
+        </header>
+        @if (d.active_total > 0) {
+          <ul class="bars">
+            @for (item of workshop(); track item.status) {
+              <li [class.is-zero]="item.count === 0">
+                <a routerLink="/service-orders">
+                  <span class="bars__label"><app-icon [name]="item.meta.icon" [size]="14" /> {{ item.label }}</span>
+                  <span class="bars__track"><span [style.width.%]="item.width"></span></span>
+                  <strong>{{ item.count }}</strong>
+                </a>
+              </li>
+            }
+          </ul>
+        } @else {
+          <div class="box__empty">
+            <app-icon name="car" [size]="18" />
+            <span>Nenhum carro na oficina.</span>
+            <a routerLink="/service-orders/new" class="link-button">Abrir uma OS</a>
+          </div>
+        }
+      </article>
+
+      <!-- Agenda de hoje -->
+      <article class="card box">
+        <header class="box__header">
+          <div>
+            <h2>Agenda de hoje</h2>
+            <p>{{ d.appointments_today.count ? d.appointments_today.count + (d.appointments_today.count === 1 ? ' horário' : ' horários') : 'Sem horários marcados' }}</p>
+          </div>
+          <a routerLink="/agenda" class="link-button">Abrir agenda</a>
+        </header>
+        @if (d.appointments_today.items.length) {
+          <ol class="agenda">
+            @for (item of d.appointments_today.items; track item.id) {
+              <li>
+                <a routerLink="/agenda">
+                  <time>{{ item.scheduled_at | date: 'HH:mm' }}</time>
+                  <span class="item__text">
+                    <strong>{{ item.customer }}</strong>
+                    <small>{{ item.vehicle ?? 'Veículo a definir' }}{{ item.plate ? ' · ' + plate(item.plate) : '' }}</small>
+                  </span>
+                </a>
+              </li>
+            }
+          </ol>
+        } @else {
+          <div class="box__empty">
+            <app-icon name="calendar" [size]="18" />
+            <span>Nenhum horário marcado para hoje.</span>
+          </div>
+        }
+      </article>
+
+      <!-- Contas a pagar -->
+      @if (d.finance; as finance) {
+        <article class="card box">
+          <header class="box__header">
+            <div>
+              <h2>Caixa e contas</h2>
+              <p>Saldo e contas a vencer</p>
+            </div>
+            <a routerLink="/finance/cash-flow" class="link-button">Fluxo de caixa</a>
+          </header>
+          <dl class="figures">
+            <div class="figures__balance" [class.danger]="finance.cash_balance_cents < 0">
+              <dt>Saldo em caixa</dt>
+              <dd>{{ finance.cash_balance_cents | money }}</dd>
+            </div>
+            <a routerLink="/finance/bills" [queryParams]="{ status: 'overdue' }" [class.danger]="finance.bills_overdue_count > 0">
+              <dt>Contas vencidas <small>{{ finance.bills_overdue_count }}</small></dt>
+              <dd>{{ finance.bills_overdue_cents | money }}</dd>
+            </a>
+            <a routerLink="/finance/bills">
+              <dt>Vencem em 7 dias <small>{{ finance.bills_due_soon_count }}</small></dt>
+              <dd>{{ finance.bills_due_soon_cents | money }}</dd>
+            </a>
+          </dl>
+        </article>
+      }
+
+      <!-- Avisos: estoque e lembretes -->
+      <article class="card box">
+        <header class="box__header">
+          <div>
+            <h2>Avisos</h2>
+            <p>{{ alertsCount() ? alertsCount() + (alertsCount() === 1 ? ' aviso' : ' avisos') : 'Tudo em ordem' }}</p>
+          </div>
+        </header>
+        <div class="list">
+          <a class="item" routerLink="/reminders">
+            <span class="item__icon" [class.tone-warning]="d.reminders_pending > 0"><app-icon name="bell" [size]="15" /></span>
+            <span class="item__text">
+              <strong>Lembretes de revisão</strong>
+              <small>{{ d.reminders_pending ? (d.reminders_pending === 1 ? '1 cliente para contatar' : d.reminders_pending + ' clientes para contatar') : 'Ninguém para contatar agora' }}</small>
+            </span>
+            <app-icon name="chevron-right" [size]="16" class="item__chevron" />
+          </a>
+          <a class="item" routerLink="/parts">
+            <span class="item__icon" [class.tone-danger]="d.low_stock.count > 0"><app-icon name="boxes" [size]="15" /></span>
+            <span class="item__text">
+              <strong>Estoque baixo</strong>
+              <small>
+                @if (d.low_stock.count) {
+                  @for (part of d.low_stock.items.slice(0, 3); track part.id; let last = $last) {
+                    {{ part.name }} ({{ stock(part.stock_quantity) }} {{ part.unit }}){{ last ? '' : ', ' }}
+                  }
+                  @if (d.low_stock.count > 3) {
+                    e mais {{ d.low_stock.count - 3 }}
+                  }
+                } @else {
+                  Todas as peças acima do mínimo
+                }
+              </small>
+            </span>
+            <app-icon name="chevron-right" [size]="16" class="item__chevron" />
+          </a>
+        </div>
+      </article>
+    </aside>
   </div>
 }

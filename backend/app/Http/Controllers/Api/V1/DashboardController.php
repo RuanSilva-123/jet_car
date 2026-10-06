@@ -222,6 +222,43 @@ class DashboardController extends Controller
             'bills_due_soon_count' => Bill::query()->open()->whereDate('due_date', '>=', $now->toDateString())->whereDate('due_date', '<=', $now->copy()->addDays(7)->toDateString())->count(),
             'bills_due_soon_cents' => (int) Bill::query()->open()->whereDate('due_date', '>=', $now->toDateString())->whereDate('due_date', '<=', $now->copy()->addDays(7)->toDateString())->sum('amount_cents'),
             'cash_balance_cents' => app(CashFlow::class)->balanceBefore($now->copy()->addDay()->startOfDay()),
+            'daily' => $this->daily($now),
         ];
+    }
+
+    /**
+     * Últimos 30 dias, dia a dia (fuso da oficina): faturamento das OS entregues e o que entrou no caixa.
+     * Dias sem movimento vêm com zero, para o gráfico ter o eixo do tempo contínuo.
+     *
+     * @return list<array{date: string, revenue_cents: int, orders: int, received_cents: int}>
+     */
+    private function daily(Carbon $now): array
+    {
+        $start = $now->copy()->subDays(29)->startOfDay();
+        $timezone = $now->getTimezone();
+
+        $orders = ServiceOrder::query()
+            ->where('status', ServiceOrderStatus::Delivered->value)
+            ->where('delivered_at', '>=', $start->copy()->utc())
+            ->get(['delivered_at', 'total_cents'])
+            ->groupBy(fn (ServiceOrder $order) => $order->delivered_at->copy()->setTimezone($timezone)->toDateString());
+
+        $received = ServiceOrderPayment::query()
+            ->whereDate('paid_at', '>=', $start->toDateString())
+            ->get(['paid_at', 'amount_cents'])
+            ->groupBy(fn (ServiceOrderPayment $payment) => $payment->paid_at->toDateString());
+
+        $days = [];
+        for ($day = $start->copy(); $day->lte($now); $day->addDay()) {
+            $key = $day->toDateString();
+            $days[] = [
+                'date' => $key,
+                'revenue_cents' => (int) ($orders->get($key)?->sum('total_cents') ?? 0),
+                'orders' => $orders->get($key)?->count() ?? 0,
+                'received_cents' => (int) ($received->get($key)?->sum('amount_cents') ?? 0),
+            ];
+        }
+
+        return $days;
     }
 }
