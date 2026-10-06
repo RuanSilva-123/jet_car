@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Storage;
  * PDFs da OS:
  * - budget: orçamento para o cliente aprovar (com campo de assinatura);
  * - report: comprovante do serviço realizado (o que foi feito, peças, garantia, recebimento);
- * - inspection: vistoria de entrada (combustível, avarias, pertences, fotos e assinatura).
+ * - inspection: vistoria de entrada (combustível, avarias, pertences e fotos).
  *
  * ?download=1 baixa o arquivo; sem ele o navegador abre para visualizar/imprimir.
  */
@@ -51,9 +51,9 @@ class ServiceOrderPdfController extends Controller
     }
 
     /**
-     * Fotos e assinatura da vistoria embutidas no PDF (data URI: o dompdf não lê o disco privado).
+     * Fotos da vistoria embutidas no PDF (data URI: o dompdf não lê o disco privado).
      *
-     * @return array{photos: list<array{src: string, caption: ?string}>, signature: ?string}
+     * @return array{photos: list<array{src: string, caption: ?string}>}
      */
     private function inspectionImages(ServiceOrder $order): array
     {
@@ -68,8 +68,6 @@ class ServiceOrderPdfController extends Controller
             ->values()
             ->all();
 
-        $signaturePath = $order->inspection?->signature_path;
-
-        return ['photos' => $photos, 'signature' => $signaturePath ? $dataUri($signaturePath) : null];
+        return ['photos' => $photos];
     }
 }

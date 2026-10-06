@@ -5,7 +5,7 @@
 # ---------------------------------------------------------------------------
 FROM php:8.4-fpm-alpine AS base
 
-# gd: reduz as fotos da vistoria no upload e permite ao dompdf embutir PNG (assinatura)
+# gd: o dompdf usa para embutir imagens (fotos da vistoria) no PDF
 RUN apk add --no-cache icu-libs libpq libzip fcgi libpng libjpeg-turbo libwebp freetype \
     && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS icu-dev libpq-dev libzip-dev linux-headers \
         libpng-dev libjpeg-turbo-dev libwebp-dev freetype-dev \

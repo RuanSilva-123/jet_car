@@ -57,13 +57,7 @@ class ServiceOrderInspection extends Model
             'fuel_level' => 'integer',
             'damages' => 'array',
             'checklist' => 'array',
-            'signed_at' => 'datetime',
         ];
-    }
-
-    public function isSigned(): bool
-    {
-        return $this->signed_at !== null;
     }
 
     /**

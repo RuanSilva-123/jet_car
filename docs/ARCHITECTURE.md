@@ -230,7 +230,7 @@ A OS acompanha o carro da entrada à entrega, em etapas: **entrada** (veículo, 
 - **Sem exclusão:** OS que não vai acontecer é cancelada e fica no histórico. Cliente ou veículo excluídos continuam aparecendo nas OS e no histórico do veículo.
 - **Km de entrada:** se for maior que o do cadastro, atualiza a quilometragem do veículo.
 - **Valores:** sempre em centavos (inteiros). `labor_total_cents`, `parts_total_cents`, `discount_cents` e `total_cents` ficam gravados na OS e são recalculados a cada alteração (desconto não pode passar do subtotal). Quantidade de peça aceita fração (ex.: 4,5 L de óleo).
-- **PDFs:** dompdf (`barryvdh/laravel-dompdf`) com views Blade em `resources/views/pdf/` (só tabelas, sem flex/grid). Fonte DejaVu Sans com subset (≈30 KB por arquivo). Cabeçalho/rodapé com logo e os dados da oficina (`App\Support\ShopSettings`, tabela `settings`). O comprovante (`report`) mostra os pagamentos e o saldo; a vistoria (`inspection`) tem fotos e a assinatura do cliente. A imagem PHP inclui a extensão `gd`, que o dompdf usa para embutir PNG.
+- **PDFs:** dompdf (`barryvdh/laravel-dompdf`) com views Blade em `resources/views/pdf/` (só tabelas, sem flex/grid). Fonte DejaVu Sans com subset (≈30 KB por arquivo). Cabeçalho/rodapé com logo e os dados da oficina (`App\Support\ShopSettings`, tabela `settings`). O comprovante (`report`) mostra os pagamentos e o saldo; a vistoria (`inspection`) traz as fotos. A imagem PHP inclui a extensão `gd`, que o dompdf usa para embutir imagens.
 - **Envio ao cliente:** o detalhe da OS abre/baixa o PDF e tem um atalho de WhatsApp com o resumo do orçamento e o **link público** para o cliente aprovar; ao usar o atalho a OS é marcada como enviada.
 - **Mecânico responsável:** `PUT /api/v1/service-orders/{id}/items/{item}/mechanic` (`mechanic_id` ou `null`). `GET /api/v1/mechanics` lista os mecânicos ativos. A lista de OS aceita `mechanic_id` (um id ou `me`).
 - **Peça do estoque:** `parts.*.part_id` (orçamento) ou `part_id` (diagnóstico) liga a linha ao catálogo. Ver "Estoque de peças".
@@ -283,12 +283,11 @@ O detalhe da OS traz `public_budget_url` quando o orçamento está completo. O c
 |---|---|
 | `GET/PUT /api/v1/service-orders/{id}/inspection` | combustível (0 = reserva … 4 = cheio), avarias (`area`, `type`, `notes`), itens conferidos, pertences, observações |
 | `POST …/inspection/photos` · `DELETE …/photos/{photo}` | fotos (JPG/PNG/WEBP, até 10 MB, 30 por OS) |
-| `GET …/inspection/photos/{photo}` · `GET …/inspection/signature` | arquivos servidos só para usuários logados (disco privado `local`) |
-| `POST …/inspection/sign` | `signed_name` e `signature` (PNG em data URL) — **trava** a vistoria |
-| `GET /api/v1/service-orders/{id}/pdf/inspection` | PDF com fotos e assinatura |
+| `GET …/inspection/photos/{photo}` | foto servida só para usuários logados (disco privado `local`) |
+| `GET /api/v1/service-orders/{id}/pdf/inspection` | PDF com os dados e as fotos |
 
 - As fotos são reduzidas no navegador (≈1600 px, JPEG) antes do upload, já com a rotação do EXIF aplicada.
-- Depois de assinada, nada da vistoria muda (nem fotos): protege a oficina em caso de reclamação.
+- Sem assinatura: a vistoria fica sempre editável e a linha do tempo registra quando foi feita. A coluna de assinatura existiu numa versão anterior e foi removida (`2026_10_07_000007`).
 
 ## Lembretes de revisão (`/reminders`)
 

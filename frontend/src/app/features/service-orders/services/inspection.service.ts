@@ -16,9 +16,6 @@ export interface Inspection {
   checklist: string[];
   belongings: string | null;
   notes: string | null;
-  signed_name: string | null;
-  signed_at: string | null;
-  signature_url: string | null;
   created_by: string | null;
   created_at: string | null;
 }
@@ -49,7 +46,7 @@ export interface InspectionPayload {
   notes: string;
 }
 
-/** Vistoria de entrada da OS (dados, fotos e assinatura). */
+/** Vistoria de entrada da OS (dados e fotos). */
 @Injectable({ providedIn: 'root' })
 export class InspectionService {
   private readonly http = inject(HttpClient);
@@ -77,7 +74,4 @@ export class InspectionService {
     return this.http.delete<InspectionResponse>(`${this.url(orderId)}/photos/${photoId}`);
   }
 
-  sign(orderId: number, signedName: string, signature: string): Observable<InspectionResponse> {
-    return this.http.post<InspectionResponse>(`${this.url(orderId)}/sign`, { signed_name: signedName, signature });
-  }
 }

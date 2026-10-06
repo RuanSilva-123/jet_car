@@ -93,12 +93,6 @@
         .photos td { width: 33.3%; padding: 0 2mm 3mm 0; }
         .photos img { width: 56mm; height: 42mm; border: 0.2mm solid #e4e4e7; }
         .photos small { display: block; color: #71717a; font-size: 7pt; }
-        .signature { margin-top: 10mm; page-break-inside: avoid; }
-        .signature__text { padding-right: 10mm; color: #52525b; font-size: 8pt; vertical-align: bottom; }
-        .signature__box { width: 72mm; text-align: center; vertical-align: bottom; }
-        .signature__box img { height: 20mm; }
-        .signature__line { padding-top: 1.5mm; border-top: 0.25mm solid #18181b; color: #18181b; font-size: 8.4pt; }
-        .signature__box small { color: #a1a1aa; font-size: 7pt; }
 
         .totals-note { margin-top: 1.5mm; color: #a1a1aa; font-size: 7.5pt; text-align: right; }
 

@@ -1,13 +1,12 @@
 import { DatePipe } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
-import { ChangeDetectionStrategy, Component, computed, inject, input, OnInit, signal, viewChild } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, inject, input, OnInit, signal } from '@angular/core';
 import { Router, RouterLink } from '@angular/router';
 import { finalize, forkJoin } from 'rxjs';
 
 import { ToastService } from '../../../../core/services/toast.service';
 import { ConfirmDialog } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { Icon } from '../../../../shared/components/icon/icon';
-import { SignaturePad } from '../../../../shared/components/signature-pad/signature-pad';
 import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { resizeImage } from '../../../../shared/utils/image';
 import { ServiceOrder } from '../../models/service-order';
@@ -15,12 +14,11 @@ import { Damage, InspectionPhoto, InspectionResponse, InspectionService } from '
 import { ServiceOrdersService } from '../../services/service-orders.service';
 
 /**
- * Vistoria na entrada do veículo: combustível, itens conferidos, avarias, pertences, fotos e
- * assinatura do cliente. Depois de assinada, fica só para consulta (protege a oficina).
+ * Vistoria na entrada do veículo: combustível, itens conferidos, avarias, pertences e fotos.
  */
 @Component({
   selector: 'app-order-inspection',
-  imports: [RouterLink, DatePipe, Icon, BrFormatPipe, SignaturePad, ConfirmDialog],
+  imports: [RouterLink, DatePipe, Icon, BrFormatPipe, ConfirmDialog],
   templateUrl: './order-inspection.html',
   styleUrl: './order-inspection.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -38,7 +36,6 @@ export class OrderInspection implements OnInit {
   protected readonly loading = signal(true);
   protected readonly saving = signal(false);
   protected readonly uploading = signal(0);
-  protected readonly signing = signal(false);
   protected readonly error = signal<string | null>(null);
 
   // Formulário
@@ -52,24 +49,18 @@ export class OrderInspection implements OnInit {
 
   // Situação
   protected readonly saved = signal(false);
-  protected readonly signedAt = signal<string | null>(null);
-  protected readonly signedName = signal<string | null>(null);
-  protected readonly signatureUrl = signal<string | null>(null);
   protected readonly createdBy = signal<string | null>(null);
+  protected readonly savedAt = signal<string | null>(null);
 
-  protected readonly signerName = signal('');
   protected readonly pendingPhotoRemoval = signal<InspectionPhoto | null>(null);
   protected readonly removingPhoto = signal(false);
 
-  protected readonly locked = computed(() => this.signedAt() !== null);
   protected readonly areas = computed(() => Object.entries(this.options()?.damage_areas ?? {}).map(([value, label]) => ({ value, label })));
   protected readonly types = computed(() => Object.entries(this.options()?.damage_types ?? {}).map(([value, label]) => ({ value, label })));
   protected readonly checklistOptions = computed(() =>
     Object.entries(this.options()?.checklist ?? {}).map(([value, label]) => ({ value, label })),
   );
   protected readonly pdfUrl = computed(() => (this.order() ? this.orders.pdfUrl(this.order()!.id, 'inspection') : null));
-
-  private readonly pad = viewChild(SignaturePad);
 
   ngOnInit(): void {
     const orderId = Number(this.id());
@@ -78,7 +69,6 @@ export class OrderInspection implements OnInit {
       .subscribe({
         next: ({ order, inspection }) => {
           this.order.set(order);
-          this.signerName.set(order.customer?.name ?? '');
           this.apply(inspection);
         },
         error: () => {
@@ -88,18 +78,12 @@ export class OrderInspection implements OnInit {
       });
   }
 
-  protected label(map: Record<string, string> | undefined, key: string): string {
-    return map?.[key] ?? key;
-  }
-
   protected setFuel(level: number): void {
-    if (this.locked()) return;
     this.fuelLevel.set(this.fuelLevel() === level ? null : level);
     this.dirty.set(true);
   }
 
   protected toggleCheck(value: string): void {
-    if (this.locked()) return;
     this.checklist.update((list) => (list.includes(value) ? list.filter((item) => item !== value) : [...list, value]));
     this.dirty.set(true);
   }
@@ -124,7 +108,7 @@ export class OrderInspection implements OnInit {
     this.dirty.set(true);
   }
 
-  protected save(onSaved?: () => void): void {
+  protected save(): void {
     const order = this.order();
     if (!order || this.saving()) return;
 
@@ -142,11 +126,7 @@ export class OrderInspection implements OnInit {
       .subscribe({
         next: (response) => {
           this.apply(response);
-          if (onSaved) {
-            onSaved();
-          } else {
-            this.toast.success('Vistoria salva. Agora colha a assinatura do cliente.');
-          }
+          this.toast.success('Vistoria salva.');
         },
         error: (error: unknown) => this.error.set(this.describeError(error, 'Não foi possível salvar a vistoria.')),
       });
@@ -195,48 +175,6 @@ export class OrderInspection implements OnInit {
       });
   }
 
-  protected clearSignature(): void {
-    this.pad()?.clear();
-  }
-
-  /** Salva o que mudou e colhe a assinatura (trava a vistoria). */
-  protected sign(): void {
-    const order = this.order();
-    const signature = this.pad()?.toDataUrl();
-    const name = this.signerName().trim();
-    if (!order) return;
-
-    if (!name) {
-      this.error.set('Informe o nome de quem está assinando.');
-      return;
-    }
-    if (!signature) {
-      this.error.set('Peça para o cliente assinar no quadro.');
-      return;
-    }
-
-    const submit = () => {
-      this.signing.set(true);
-      this.inspections
-        .sign(order.id, name, signature)
-        .pipe(finalize(() => this.signing.set(false)))
-        .subscribe({
-          next: (response) => {
-            this.apply(response);
-            this.toast.success('Vistoria assinada.');
-          },
-          error: (error: unknown) => this.error.set(this.describeError(error, 'Não foi possível registrar a assinatura.')),
-        });
-    };
-
-    this.error.set(null);
-    if (this.dirty() || !this.saved()) {
-      this.save(submit);
-    } else {
-      submit();
-    }
-  }
-
   private apply(response: InspectionResponse): void {
     this.options.set(response.options);
     this.photos.set(response.photos);
@@ -248,10 +186,8 @@ export class OrderInspection implements OnInit {
     this.damages.set((data?.damages ?? []).map((damage) => ({ ...damage, notes: damage.notes ?? '' })));
     this.belongings.set(data?.belongings ?? '');
     this.notes.set(data?.notes ?? '');
-    this.signedAt.set(data?.signed_at ?? null);
-    this.signedName.set(data?.signed_name ?? null);
-    this.signatureUrl.set(data?.signature_url ?? null);
     this.createdBy.set(data?.created_by ?? null);
+    this.savedAt.set(data?.created_at ?? null);
     this.dirty.set(false);
   }
 

@@ -107,7 +107,7 @@ class ServiceOrderResource extends JsonResource
             // Detalhe: situação da vistoria de entrada (o conteúdo vem de /inspection)
             'inspection' => $this->whenLoaded('inspection', fn () => [
                 'exists' => $this->inspection !== null,
-                'signed_at' => $this->inspection?->signed_at?->toIso8601String(),
+                'updated_at' => $this->inspection?->updated_at?->toIso8601String(),
             ]),
             'payments' => $this->whenLoaded('payments', fn () => $this->payments->map(fn ($payment) => [
                 'id' => $payment->id,

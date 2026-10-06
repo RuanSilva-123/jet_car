@@ -508,10 +508,10 @@
       <!-- Vistoria de entrada -->
       <article class="card info inspection-card">
         <h3>Vistoria de entrada</h3>
-        @if (order.inspection?.signed_at) {
-          <p class="inspection-card__state is-signed"><app-icon name="signature" [size]="14" /> Assinada em {{ order.inspection!.signed_at | date: "dd/MM/yyyy 'às' HH:mm" }}</p>
-        } @else if (order.inspection?.exists) {
-          <p class="inspection-card__state"><app-icon name="alert" [size]="14" /> Registrada, falta a assinatura do cliente</p>
+        @if (order.inspection?.exists) {
+          <p class="inspection-card__state is-done">
+            <app-icon name="check" [size]="14" /> Registrada{{ order.inspection!.updated_at ? ' · atualizada em ' + (order.inspection!.updated_at | date: 'dd/MM/yyyy') : '' }}
+          </p>
         } @else {
           <p class="inspection-card__state"><app-icon name="camera" [size]="14" /> Fotos, avarias, combustível e pertences</p>
         }

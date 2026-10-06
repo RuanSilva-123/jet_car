@@ -80,7 +80,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::delete('parts/{part}', 'removePart')->whereNumber('part')->name('parts.destroy');
         });
 
-        // Vistoria de entrada (fotos e assinatura no disco privado)
+        // Vistoria de entrada (fotos no disco privado)
         Route::prefix('service-orders/{service_order}/inspection')
             ->name('service-orders.inspection.')
             ->controller(ServiceOrderInspectionController::class)
@@ -90,8 +90,6 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
                 Route::post('photos', 'storePhoto')->name('photos.store');
                 Route::get('photos/{photo}', 'photo')->whereNumber('photo')->name('photos.show');
                 Route::delete('photos/{photo}', 'destroyPhoto')->whereNumber('photo')->name('photos.destroy');
-                Route::post('sign', 'sign')->name('sign');
-                Route::get('signature', 'signature')->name('signature');
             });
 
         // Recebimentos da OS (registrar: financeiro; remover: só master)

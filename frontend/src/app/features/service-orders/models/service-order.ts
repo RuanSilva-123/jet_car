@@ -143,7 +143,7 @@ export interface ServiceOrder {
   /** Detalhe: link público do orçamento (cliente aprova sem login). */
   public_budget_url?: string | null;
   payments?: ServiceOrderPayment[];
-  inspection?: { exists: boolean; signed_at: string | null };
+  inspection?: { exists: boolean; updated_at: string | null };
   /** Detalhe: serviços/peças ainda sem valor. */
   unpriced_count?: number;
   customer?: ServiceOrderCustomer;

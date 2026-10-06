@@ -15,14 +15,11 @@
             <td>
                 <div class="doc-type">Vistoria de entrada</div>
                 <div class="doc-number">OS {{ $order->number() }}</div>
-                <p class="doc-lead">Estado do veículo ao chegar na oficina, conferido com o cliente.</p>
+                <p class="doc-lead">Estado do veículo ao chegar na oficina.</p>
             </td>
             <td style="width: 58mm; vertical-align: bottom;">
                 <table class="doc-meta">
                     <tr><td class="label">Entrada</td><td class="value">{{ $order->created_at->format('d/m/Y H:i') }}</td></tr>
-                    @if ($inspection?->signed_at)
-                        <tr><td class="label">Assinada</td><td class="value">{{ $inspection->signed_at->format('d/m/Y H:i') }}</td></tr>
-                    @endif
                 </table>
             </td>
         </tr>
@@ -114,22 +111,5 @@
                 </table>
             </div>
         @endif
-
-        <table class="signature">
-            <tr>
-                <td class="signature__text">
-                    Declaro que conferi o estado do veículo descrito acima no momento da entrega à oficina.
-                </td>
-                <td class="signature__box">
-                    @if ($signature)
-                        <img src="{{ $signature }}" alt="">
-                    @endif
-                    <div class="signature__line">{{ $inspection->signed_name ?: 'Assinatura do cliente' }}</div>
-                    @if ($inspection->signed_at)
-                        <small>{{ $inspection->signed_at->format('d/m/Y \à\s H:i') }}</small>
-                    @endif
-                </td>
-            </tr>
-        </table>
     @endif
 @endsection
