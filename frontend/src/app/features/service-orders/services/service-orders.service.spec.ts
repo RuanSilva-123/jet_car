@@ -65,11 +65,42 @@ describe('ServiceOrdersService', () => {
 
     expect(api.pdfUrl(5, 'budget')).toBe('/api/v1/service-orders/5/pdf/budget');
     expect(api.pdfUrl(5, 'report', true)).toBe('/api/v1/service-orders/5/pdf/report?download=1');
+    expect(api.pdfUrl(5, 'inspection')).toBe('/api/v1/service-orders/5/pdf/inspection');
+  });
+
+  it('filtra os serviços do mecânico logado e atribui responsável', () => {
+    api.list({ search: '', status: 'active', page: 1, perPage: 15, mechanicId: 'me' }).subscribe();
+    expect(http.expectOne((r) => r.url === '/api/v1/service-orders').request.params.get('mechanic_id')).toBe('me');
+
+    api.assignMechanic(5, 9, 4).subscribe();
+    const assign = http.expectOne('/api/v1/service-orders/5/items/9/mechanic');
+    expect(assign.request.method).toBe('PUT');
+    expect(assign.request.body).toEqual({ mechanic_id: 4 });
+
+    api.assignMechanic(5, 9, null).subscribe();
+    expect(http.expectOne('/api/v1/service-orders/5/items/9/mechanic').request.body).toEqual({ mechanic_id: null });
+  });
+
+  it('registra e remove pagamentos e adiciona peça do estoque', () => {
+    api.addPayment(5, { method: 'credit_card', amount_cents: 15000, installments: 3, paid_at: '2026-10-06', notes: '' }).subscribe();
+    expect(http.expectOne('/api/v1/service-orders/5/payments').request.body).toEqual({
+      method: 'credit_card',
+      amount_cents: 15000,
+      installments: 3,
+      paid_at: '2026-10-06',
+      notes: '',
+    });
+
+    api.removePayment(5, 2).subscribe();
+    expect(http.expectOne('/api/v1/service-orders/5/payments/2').request.method).toBe('DELETE');
+
+    api.addPart(5, { part_id: 8, name: 'Filtro', part_number: 'F1', quantity: 1 }).subscribe();
+    expect(http.expectOne('/api/v1/service-orders/5/parts').request.body.part_id).toBe(8);
   });
 });
 
 describe('próximo passo da OS', () => {
-  const item = { id: 1, labor_service_id: 1, name: 'Troca de óleo', notes: null, price_cents: null, is_done: false, done_at: null, done_by: null };
+  const item = { id: 1, labor_service_id: 1, name: 'Troca de óleo', notes: null, price_cents: null, is_done: false, done_at: null, done_by: null, mechanic_id: null, mechanic: null };
   const order = (status: ServiceOrderStatus, budget_approved_at: string | null = null, lines = 1, unpriced_count = 0) => ({
     status,
     budget_approved_at,

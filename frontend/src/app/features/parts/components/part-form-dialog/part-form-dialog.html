@@ -1,0 +1,136 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="part-dialog-title">
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="boxes" [size]="20" /></span>
+      <div>
+        <h2 id="part-dialog-title">{{ isEdit() ? 'Editar peça' : 'Nova peça' }}</h2>
+        <p>Custo, preço de venda e estoque mínimo.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body dialog__body--scroll">
+      @if (formError(); as message) {
+        <p class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+
+      <div class="field" [class.field--invalid]="errorFor('name')">
+        <label for="part-name-input">Nome da peça</label>
+        <div class="field__control">
+          <input #nameInput id="part-name-input" formControlName="name" placeholder="Ex.: Filtro de óleo" autocomplete="off" />
+        </div>
+        @if (errorFor('name'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="dialog__grid">
+        <div class="field" [class.field--invalid]="errorFor('part_number')">
+          <label for="part-code">Código <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="part-code" formControlName="part_number" placeholder="Ex.: PSL-123" autocomplete="off" />
+          </div>
+          @if (errorFor('part_number'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+        <div class="field">
+          <label for="part-brand">Marca <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <input id="part-brand" formControlName="brand" placeholder="Ex.: Tecfil" autocomplete="off" />
+          </div>
+        </div>
+      </div>
+
+      <div class="dialog__grid">
+        <div class="field" [class.field--invalid]="errorFor('cost')">
+          <label for="part-cost">Custo <span class="optional">(unitário)</span></label>
+          <div class="field__control">
+            <span class="field__suffix">R$</span>
+            <input id="part-cost" formControlName="cost" appMask="money" inputmode="numeric" placeholder="0,00" />
+          </div>
+          @if (errorFor('cost'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+        <div class="field" [class.field--invalid]="errorFor('price')">
+          <label for="part-price">Preço de venda</label>
+          <div class="field__control">
+            <span class="field__suffix">R$</span>
+            <input id="part-price" formControlName="price" appMask="money" inputmode="numeric" placeholder="0,00" />
+          </div>
+          @if (errorFor('price'); as error) {
+            <small class="field__error">{{ error }}</small>
+          } @else if (margin() !== null) {
+            <small class="field__hint">Margem de {{ margin() }}% sobre o preço de venda</small>
+          }
+        </div>
+      </div>
+
+      <div class="dialog__grid">
+        <div class="field">
+          <label for="part-unit">Unidade</label>
+          <div class="field__control">
+            <select id="part-unit" formControlName="unit">
+              @for (unit of units; track unit) {
+                <option [value]="unit">{{ unit }}</option>
+              }
+            </select>
+          </div>
+        </div>
+        <div class="field" [class.field--invalid]="errorFor('min_stock')">
+          <label for="part-min">Estoque mínimo</label>
+          <div class="field__control">
+            <input id="part-min" formControlName="min_stock" appMask="quantity" inputmode="decimal" />
+          </div>
+          @if (errorFor('min_stock'); as error) {
+            <small class="field__error">{{ error }}</small>
+          } @else {
+            <small class="field__hint">Avisa quando chegar nessa quantidade.</small>
+          }
+        </div>
+        @if (!isEdit()) {
+          <div class="field" [class.field--invalid]="errorFor('initial_stock')">
+            <label for="part-initial">Quantidade em estoque</label>
+            <div class="field__control">
+              <input id="part-initial" formControlName="initial_stock" appMask="quantity" inputmode="decimal" />
+            </div>
+            @if (errorFor('initial_stock'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+        }
+      </div>
+
+      <div class="field">
+        <label for="part-notes">Observações <span class="optional">(opcional)</span></label>
+        <div class="field__control field__control--textarea">
+          <textarea id="part-notes" formControlName="notes" rows="2" placeholder="Ex.: fornecedor, aplicação"></textarea>
+        </div>
+      </div>
+
+      <label class="switch">
+        <input type="checkbox" formControlName="is_active" />
+        <span class="switch__track"></span>
+        <span class="switch__text">
+          <strong>{{ form.controls.is_active.value ? 'Peça ativa' : 'Peça inativa' }}</strong>
+          <small>{{ form.controls.is_active.value ? 'Aparece para usar nas OS.' : 'Fica oculta, mas o histórico é mantido.' }}</small>
+        </span>
+      </label>
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        Salvar
+      </button>
+    </footer>
+  </form>
+</dialog>

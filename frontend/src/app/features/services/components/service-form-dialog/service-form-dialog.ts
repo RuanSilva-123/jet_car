@@ -17,10 +17,12 @@ import { finalize } from 'rxjs';
 import { ValidationErrorBody } from '../../../../core/http/api';
 import { ToastService } from '../../../../core/services/toast.service';
 import { Icon } from '../../../../shared/components/icon/icon';
+import { MaskDirective } from '../../../../shared/directives/mask.directive';
+import { digits, formatMileage } from '../../../../shared/utils/br-format';
 import { LaborService, SERVICE_CATEGORIES, ServiceCategory } from '../../models/labor-service';
 import { LaborServicesService } from '../../services/labor-services.service';
 
-type FieldName = 'name' | 'category' | 'description';
+type FieldName = 'name' | 'category' | 'description' | 'reminder_months' | 'reminder_km';
 
 const MESSAGES: Record<string, string> = {
   required: 'Campo obrigatório.',
@@ -33,7 +35,7 @@ const MESSAGES: Record<string, string> = {
  */
 @Component({
   selector: 'app-service-form-dialog',
-  imports: [ReactiveFormsModule, Icon],
+  imports: [ReactiveFormsModule, Icon, MaskDirective],
   templateUrl: './service-form-dialog.html',
   styleUrl: './service-form-dialog.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -60,6 +62,9 @@ export class ServiceFormDialog {
     category: ['maintenance' as ServiceCategory, Validators.required],
     description: ['', Validators.maxLength(1000)],
     is_active: [true],
+    // Revisão (opcional): gera lembrete para o cliente voltar
+    reminder_months: [''],
+    reminder_km: [''],
   });
 
   private readonly dialog = viewChild.required<ElementRef<HTMLDialogElement>>('dialog');
@@ -95,7 +100,12 @@ export class ServiceFormDialog {
     }
 
     this.saving.set(true);
-    const payload = this.form.getRawValue();
+    const value = this.form.getRawValue();
+    const payload = {
+      ...value,
+      reminder_months: digits(value.reminder_months) ? Number(digits(value.reminder_months)) : null,
+      reminder_km: digits(value.reminder_km) ? Number(digits(value.reminder_km)) : null,
+    };
     const current = this.service();
     const request = current ? this.services.update(current.id, payload) : this.services.create(payload);
 
@@ -132,6 +142,8 @@ export class ServiceFormDialog {
       category: service?.category ?? category ?? 'maintenance',
       description: service?.description ?? '',
       is_active: service?.is_active ?? true,
+      reminder_months: service?.reminder_months ? String(service.reminder_months) : '',
+      reminder_km: service?.reminder_km ? formatMileage(service.reminder_km) : '',
     });
   }
 

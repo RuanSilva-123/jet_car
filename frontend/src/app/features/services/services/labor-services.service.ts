@@ -42,6 +42,9 @@ export class LaborServicesService {
       category: service.category,
       description: service.description ?? '',
       is_active: isActive,
+      // Reenvia o intervalo: a API zera o que não vier
+      reminder_months: service.reminder_months,
+      reminder_km: service.reminder_km,
     });
   }
 

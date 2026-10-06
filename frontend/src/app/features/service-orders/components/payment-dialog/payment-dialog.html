@@ -1,0 +1,100 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="payment-dialog-title">
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="wallet" [size]="20" /></span>
+      <div>
+        <h2 id="payment-dialog-title">Registrar pagamento</h2>
+        <p>OS #{{ order()?.number }} · {{ order()?.customer?.name }}</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      <div class="dialog__summary">
+        <span>Saldo em aberto</span>
+        <strong>{{ balance() | money }}</strong>
+      </div>
+
+      <div class="field">
+        <span class="field__label">Forma de pagamento</span>
+        <div class="methods" role="radiogroup" aria-label="Forma de pagamento">
+          @for (option of methods; track option.value) {
+            <button
+              type="button"
+              class="method"
+              role="radio"
+              [attr.aria-checked]="method() === option.value"
+              [class.is-selected]="method() === option.value"
+              (click)="method.set(option.value)"
+            >
+              {{ option.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="dialog__grid">
+        <div class="field">
+          <label for="payment-amount">Valor recebido</label>
+          <div class="field__control">
+            <span class="field__suffix">R$</span>
+            <input id="payment-amount" [value]="amount()" (input)="onAmount($event)" inputmode="numeric" />
+          </div>
+          @if (amountCents() > 0 && remaining() > 0) {
+            <small class="field__hint">Fica faltando {{ remaining() | money }}.</small>
+          } @else if (amountCents() > 0 && remaining() === 0) {
+            <small class="field__hint">Quita a OS.</small>
+          }
+        </div>
+        @if (method() === 'credit_card') {
+          <div class="field">
+            <label for="payment-installments">Parcelas</label>
+            <div class="field__control">
+              <select id="payment-installments" [value]="installments()" (change)="installments.set(+$any($event.target).value)">
+                @for (n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]; track n) {
+                  <option [value]="n" [selected]="n === installments()">{{ n === 1 ? 'À vista' : n + 'x' }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        }
+        <div class="field">
+          <label for="payment-date">Data</label>
+          <div class="field__control">
+            <input id="payment-date" type="date" [max]="maxDate" [value]="paidAt()" (change)="paidAt.set($any($event.target).value)" />
+          </div>
+        </div>
+      </div>
+
+      <div class="quick">
+        <button type="button" class="btn btn--ghost btn--sm" (click)="setAmount(balance())">Valor total</button>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="setAmount(half())">Metade (sinal)</button>
+      </div>
+
+      <div class="field">
+        <label for="payment-notes">Observação <span class="optional">(opcional)</span></label>
+        <div class="field__control">
+          <input id="payment-notes" [value]="notes()" (input)="notes.set($any($event.target).value)" maxlength="500" placeholder="Ex.: comprovante enviado no WhatsApp" />
+        </div>
+      </div>
+
+      @if (error(); as message) {
+        <p class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        Registrar
+      </button>
+    </footer>
+  </form>
+</dialog>

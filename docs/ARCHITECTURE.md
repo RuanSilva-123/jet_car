@@ -112,7 +112,7 @@ Pastas previstas conforme o projeto crescer: `Actions/` (casos de uso), `Policie
 
 **Regras de acesso na API**
 
-- **Públicas**: `GET /sanctum/csrf-cookie` e `POST /api/v1/auth/login`. O login tem rate limit: 5 tentativas por e-mail+IP e 20 por minuto por IP.
+- **Públicas**: `GET /sanctum/csrf-cookie`, `POST /api/v1/auth/login` e o orçamento por link assinado (`/api/v1/public/budgets/{token}`, ver abaixo). O login tem rate limit: 5 tentativas por e-mail+IP e 20 por minuto por IP; o orçamento público, 30 por minuto por IP.
 - **Todo o resto** fica num único grupo com `auth:sanctum` + `active`. Nenhuma rota protegida fica fora desse grupo.
 - Não existe rota de registro.
 - Contas inativas (`is_active = false`) não conseguem entrar e recebem a mesma mensagem de credencial inválida, para não revelar quais e-mails existem. Se uma conta for desativada durante a sessão, ela é deslogada na próxima requisição.
@@ -140,8 +140,14 @@ frontend/src/
 │   │   ├── auth/                # login
 │   │   ├── customers/           # clientes + veículos (FIPE, CEP, placa)
 │   │   ├── services/            # catálogo de mão de obra
-│   │   ├── dashboard/           # vazio por enquanto (só a saudação)
-│   │   ├── service-orders/      # ordens de serviço + histórico do veículo
+│   │   ├── dashboard/           # indicadores da oficina
+│   │   ├── agenda/              # horários marcados + check-in que vira OS
+│   │   ├── service-orders/      # ordens de serviço, vistoria, pagamentos + histórico do veículo
+│   │   ├── parts/               # estoque de peças
+│   │   ├── reminders/           # lembretes de revisão
+│   │   ├── finance/             # contas a receber e recebimentos (sem mecânico)
+│   │   ├── reports/             # relatórios + CSV (sem mecânico)
+│   │   ├── public-budget/       # orçamento aberto pelo cliente (sem login)
 │   │   └── users/               # lista + cadastro/edição (só master)
 │   ├── app.routes.ts
 │   └── app.config.ts
@@ -186,8 +192,9 @@ features/<modulo>/
 
 | Papel    | Quem                            | Pode                                   |
 |----------|---------------------------------|----------------------------------------|
-| `master` | criado pelo `MasterUserSeeder`  | tudo, inclusive criar e gerenciar contas |
-| `admin`  | criado pelo master no painel    | usar o painel                          |
+| `master` | criado pelo `MasterUserSeeder`  | tudo, inclusive criar e gerenciar contas e estornar pagamentos |
+| `admin`  | criado pelo master no painel    | usar o painel, inclusive o financeiro   |
+| `mechanic` | criado pelo master no painel  | OS, checklist, vistoria, agenda e estoque; **não** acessa pagamentos, contas a receber, relatórios nem os números financeiros do dashboard (gate `manage-finance`) |
 
 ## Ordens de serviço (`/service-orders`) e histórico do veículo (`/vehicles/{id}/history`)
 
@@ -223,13 +230,102 @@ A OS acompanha o carro da entrada à entrega, em etapas: **entrada** (veículo, 
 - **Sem exclusão:** OS que não vai acontecer é cancelada e fica no histórico. Cliente ou veículo excluídos continuam aparecendo nas OS e no histórico do veículo.
 - **Km de entrada:** se for maior que o do cadastro, atualiza a quilometragem do veículo.
 - **Valores:** sempre em centavos (inteiros). `labor_total_cents`, `parts_total_cents`, `discount_cents` e `total_cents` ficam gravados na OS e são recalculados a cada alteração (desconto não pode passar do subtotal). Quantidade de peça aceita fração (ex.: 4,5 L de óleo).
-- **PDFs:** dompdf (`barryvdh/laravel-dompdf`) com views Blade em `resources/views/pdf/` (só tabelas, sem flex/grid). Fonte DejaVu Sans com subset (≈30 KB por arquivo). Cabeçalho/rodapé com logo e os dados da oficina (`App\Support\ShopSettings`, tabela `settings`). Sem campos de assinatura: o fechamento (como aprovar, condições, garantia) fica ao lado dos totais.
-- **Envio ao cliente:** o detalhe da OS abre/baixa o PDF e tem um atalho de WhatsApp com o resumo do orçamento; ao usar o atalho a OS é marcada como enviada.
+- **PDFs:** dompdf (`barryvdh/laravel-dompdf`) com views Blade em `resources/views/pdf/` (só tabelas, sem flex/grid). Fonte DejaVu Sans com subset (≈30 KB por arquivo). Cabeçalho/rodapé com logo e os dados da oficina (`App\Support\ShopSettings`, tabela `settings`). O comprovante (`report`) mostra os pagamentos e o saldo; a vistoria (`inspection`) tem fotos e a assinatura do cliente. A imagem PHP inclui a extensão `gd`, que o dompdf usa para embutir PNG.
+- **Envio ao cliente:** o detalhe da OS abre/baixa o PDF e tem um atalho de WhatsApp com o resumo do orçamento e o **link público** para o cliente aprovar; ao usar o atalho a OS é marcada como enviada.
+- **Mecânico responsável:** `PUT /api/v1/service-orders/{id}/items/{item}/mechanic` (`mechanic_id` ou `null`). `GET /api/v1/mechanics` lista os mecânicos ativos. A lista de OS aceita `mechanic_id` (um id ou `me`).
+- **Peça do estoque:** `parts.*.part_id` (orçamento) ou `part_id` (diagnóstico) liga a linha ao catálogo. Ver "Estoque de peças".
 
-## Próximos passos
+## Orçamento por link (`/orcamento/{token}`)
 
-1. Dashboard com indicadores reais (OS em aberto, atrasadas, entregues no mês, faturamento).
-2. Pagamentos da OS (forma de pagamento, parcial/quitado).
+O detalhe da OS traz `public_budget_url` quando o orçamento está completo. O cliente abre o link pelo WhatsApp, vê os itens e aprova ou recusa sem login.
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/public/budgets/{token}` | oficina, veículo, itens, totais e `state` (`awaiting`, `approved`, `rejected`, `unavailable`) |
+| `POST …/approve` | `total_cents` (o valor que o cliente viu) e `name` opcional → registra a aprovação e inicia o serviço |
+| `POST …/reject` | `total_cents` e `reason` opcional → orçamento volta para revisão (`open`); quem cancela é a oficina |
+
+- **Token assinado** (`App\Support\BudgetLink`): `{id}.{expira}.{assinatura}`, com HMAC-SHA256 da chave da aplicação sobre id + validade. Trocar o número da OS ou estender o prazo invalida o link (404); link vencido responde 410. A validade é a do orçamento (`budget_validity_days` nos dados da oficina).
+- **Sem dados pessoais** na resposta: só o primeiro nome do cliente, o veículo e os itens.
+- **Valor conferido:** se a oficina mudou o orçamento depois do envio, `total_cents` não bate e a API pede para o cliente conferir de novo (422).
+- Quem recusou só decide de novo depois de um novo envio. A linha do tempo registra "pelo link", sem usuário.
+
+## Pagamentos e contas a receber (`/finance`)
+
+| Endpoint | Ação |
+|---|---|
+| `POST /api/v1/service-orders/{id}/payments` | `method` (`pix`, `cash`, `credit_card`, `debit_card`, `bank_transfer`, `bank_slip`, `other`), `amount_cents`, `installments` (só cartão de crédito), `paid_at`, `notes` |
+| `DELETE /api/v1/service-orders/{id}/payments/{payment}` | estorno/lançamento errado — **só master** |
+| `GET /api/v1/receivables` | OS aprovadas, não canceladas, com saldo; `scope` = `all`, `delivered` (carro saiu sem quitar) ou `in_service`; resumo por escopo |
+| `GET /api/v1/payments` | recebimentos do período (`from`, `to`, `method`) com total por forma de pagamento |
+
+- O total pago fica em `service_orders.paid_cents`. A OS informa `balance_cents` e `payment_status` (`none`, `pending`, `partial`, `paid`).
+- O valor não pode passar do saldo; o registro trava a linha da OS (`lockForUpdate`) para dois recebimentos simultâneos não estourarem o saldo.
+- Cada recebimento/estorno vira evento na linha do tempo.
+
+## Estoque de peças (`/parts`)
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/parts` | `search` (nome, código, marca), `status` = `active`, `inactive` ou `low` (estoque baixo); `summary.low_stock` |
+| `POST /api/v1/parts` · `PUT …/{id}` | nome, código (único), marca, unidade, custo, preço de venda, estoque mínimo; `initial_stock` só no cadastro |
+| `DELETE /api/v1/parts/{id}` | exclusão lógica — **só master** |
+| `POST /api/v1/parts/{id}/stock` | `type` = `entry` (compra, com custo opcional que atualiza o custo da peça) ou `adjustment` (quantidade contada) |
+| `GET /api/v1/parts/{id}/movements` | histórico de entradas e saídas com o saldo após cada uma |
+
+- A quantidade só muda por `App\Services\Inventory\StockManager`, que grava cada movimentação em `stock_movements`.
+- **Baixa automática:** peça do estoque que entra na OS sai do estoque; mudar a quantidade movimenta só a diferença; remover a peça ou **cancelar a OS** devolve; reabrir uma OS cancelada dá baixa de novo.
+- O estoque pode ficar negativo (peça usada antes de lançar a compra) e então aparece como **estoque baixo**, junto com as peças no mínimo.
+
+## Vistoria de entrada (`/service-orders/{id}/inspection`)
+
+| Endpoint | Ação |
+|---|---|
+| `GET/PUT /api/v1/service-orders/{id}/inspection` | combustível (0 = reserva … 4 = cheio), avarias (`area`, `type`, `notes`), itens conferidos, pertences, observações |
+| `POST …/inspection/photos` · `DELETE …/photos/{photo}` | fotos (JPG/PNG/WEBP, até 10 MB, 30 por OS) |
+| `GET …/inspection/photos/{photo}` · `GET …/inspection/signature` | arquivos servidos só para usuários logados (disco privado `local`) |
+| `POST …/inspection/sign` | `signed_name` e `signature` (PNG em data URL) — **trava** a vistoria |
+| `GET /api/v1/service-orders/{id}/pdf/inspection` | PDF com fotos e assinatura |
+
+- As fotos são reduzidas no navegador (≈1600 px, JPEG) antes do upload, já com a rotação do EXIF aplicada.
+- Depois de assinada, nada da vistoria muda (nem fotos): protege a oficina em caso de reclamação.
+
+## Lembretes de revisão (`/reminders`)
+
+- O serviço do catálogo pode ter intervalo de revisão: `reminder_months` e/ou `reminder_km` ("troca de óleo a cada 6 meses ou 10 mil km", o que vier primeiro). A lista sugerida já traz intervalos comuns.
+- **Scheduler:** `php artisan jetcar:service-reminders` roda todo dia às 6h no container `scheduler` (`routes/console.php`). Para cada veículo e serviço periódico, olha a última execução em OS entregue e cria o lembrete quando vence em até `REMINDER_LEAD_DAYS` dias (padrão 15) ou `REMINDER_LEAD_KM` km (padrão 500, pela última km conhecida do veículo). Rodar de novo não duplica; serviço refeito encerra o lembrete anterior.
+- `GET /api/v1/service-reminders` (`status` = `open`, `scheduled`, `dismissed`, `all`…), `PATCH …/{id}` (contatado, agendado, descartado), `POST …/refresh` (gera na hora).
+- No painel: WhatsApp com a mensagem pronta (marca como contatado) e "Agendar", que abre a agenda já preenchida.
+
+## Agenda (`/agenda`)
+
+| Endpoint | Ação |
+|---|---|
+| `GET /api/v1/appointments?from&to` | agendamentos do período (até 62 dias), datas ISO 8601 com fuso |
+| `POST /api/v1/appointments` · `PUT …/{id}` | cliente, veículo (opcional), horário, duração, motivo; `service_reminder_id` marca o lembrete como agendado |
+| `POST …/{id}/status` | `scheduled`, `confirmed`, `no_show`, `canceled` |
+| `POST …/{id}/check-in` | o carro chegou: abre a OS com o motivo como relato (pede o veículo se não estava definido) |
+
+- O banco guarda em UTC; o painel mostra no horário do navegador. Textos gerados pelo servidor usam `DISPLAY_TIMEZONE` (padrão `America/Sao_Paulo`).
+
+## Dashboard (`/dashboard`)
+
+`GET /api/v1/dashboard?budget_days=3`: OS em aberto por status, atrasadas (previsão vencida e ainda não prontas), orçamentos enviados há mais de X dias sem resposta, veículos prontos esperando retirada, agenda do dia, lembretes pendentes e estoque baixo. Para quem acessa o financeiro: faturamento do mês (OS entregues), ticket médio, comparação com o mesmo período do mês anterior, recebido no mês e total a receber. "Hoje" e "mês" seguem `DISPLAY_TIMEZONE`.
+
+## Relatórios (`/reports`)
+
+`GET /api/v1/reports/{revenue|services|customers|mechanics}?from&to` (padrão: mês atual). `?format=csv` baixa o mesmo relatório para o Excel (`;`, vírgula decimal, UTF-8 com BOM).
+
+- **revenue:** OS entregues por dia ou mês (`group`), com mão de obra, peças, descontos, ticket médio e o que foi recebido.
+- **services:** serviços feitos nas OS entregues, por quantidade e faturamento.
+- **customers:** clientes atendidos no período, gasto, primeira/última visita e se já tinham vindo antes (`only_returning=1`).
+- **mechanics:** serviços concluídos por mecânico no período (produção).
+
+Agrupamentos feitos em PHP (`App\Services\Reports\ReportBuilder`), para funcionar igual no PostgreSQL e no SQLite dos testes.
+
+## Busca global (Ctrl+K)
+
+`GET /api/v1/search?q=` acha veículo pela placa (com ou sem hífen) ou modelo, cliente por nome, CPF/CNPJ ou telefone e OS pelo número ("OS 42", "#00042"). No painel, `Ctrl+K` / `⌘K` (ou o campo no topo) abre a busca; com a placa, a primeira opção é a OS em aberto do veículo, depois o histórico e o cliente.
 
 ## Clientes e veículos (`/customers`)
 

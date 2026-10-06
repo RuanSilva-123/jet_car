@@ -70,4 +70,21 @@ describe('AuthService', () => {
 
     expect(service.user()).toBeNull();
   });
+
+  it('mecânico não acessa o financeiro', () => {
+    service.login({ email: 'mec@jetcar.test', password: 'secret', remember: false }).subscribe();
+    http.expectOne('/sanctum/csrf-cookie').flush(null);
+    http.expectOne('/api/v1/auth/login').flush({ data: { ...user, role: 'mechanic', role_label: 'Mecânico', can_manage_finance: false } });
+
+    expect(service.isMechanic()).toBe(true);
+    expect(service.canManageFinance()).toBe(false);
+  });
+
+  it('master acessa o financeiro', () => {
+    service.login({ email: user.email, password: 'secret', remember: false }).subscribe();
+    http.expectOne('/sanctum/csrf-cookie').flush(null);
+    http.expectOne('/api/v1/auth/login').flush({ data: { ...user, can_manage_finance: true } });
+
+    expect(service.canManageFinance()).toBe(true);
+  });
 });

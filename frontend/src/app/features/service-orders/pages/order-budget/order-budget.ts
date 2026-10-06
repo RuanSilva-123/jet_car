@@ -11,6 +11,8 @@ import { Icon } from '../../../../shared/components/icon/icon';
 import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { centsToInput, formatQuantity, maskMoney, maskQuantity, moneyToCents, parseQuantity } from '../../../../shared/utils/br-format';
+import { Part } from '../../../parts/models/part';
+import { PartsService } from '../../../parts/services/parts.service';
 import { ServiceFormDialog } from '../../../services/components/service-form-dialog/service-form-dialog';
 import { LaborService } from '../../../services/models/labor-service';
 import { LaborServicesService } from '../../../services/services/labor-services.service';
@@ -32,6 +34,8 @@ interface ItemDraft {
 interface PartDraft {
   key: number;
   id: number | null;
+  /** Peça do estoque (sai do estoque ao salvar). */
+  part_id: number | null;
   name: string;
   part_number: string;
   quantity: string;
@@ -59,6 +63,7 @@ function priceToCents(value: string): number | null {
 export class OrderBudget implements OnInit {
   private readonly orders = inject(ServiceOrdersService);
   private readonly laborServices = inject(LaborServicesService);
+  private readonly partsCatalog = inject(PartsService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -78,6 +83,9 @@ export class OrderBudget implements OnInit {
   protected readonly serviceOptions = signal<ComboboxOption[]>([]);
   protected readonly searchingServices = signal(false);
   protected readonly newServiceOpen = signal(false);
+  protected readonly stockOptions = signal<ComboboxOption[]>([]);
+  protected readonly searchingStock = signal(false);
+  private stockParts: Part[] = [];
 
   protected readonly laborTotal = computed(() => this.items().reduce((sum, item) => sum + moneyToCents(item.price), 0));
   protected readonly partsTotal = computed(() => this.parts().reduce((sum, part) => sum + (this.partTotal(part) ?? 0), 0));
@@ -93,8 +101,29 @@ export class OrderBudget implements OnInit {
   protected readonly lineCount = computed(() => this.items().length + this.parts().length);
 
   private readonly serviceSearch$ = new Subject<string>();
+  private readonly stockSearch$ = new Subject<string>();
 
   ngOnInit(): void {
+    this.stockSearch$
+      .pipe(
+        debounceTime(200),
+        distinctUntilChanged(),
+        switchMap((search) => {
+          this.searchingStock.set(true);
+          return this.partsCatalog.list({ search, status: 'active', page: 1, perPage: 30 }).pipe(finalize(() => this.searchingStock.set(false)));
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((result) => {
+        this.stockParts = result.data;
+        this.stockOptions.set(
+          result.data.map((part) => ({
+            code: String(part.id),
+            name: `${part.name}${part.part_number ? ` (${part.part_number})` : ''} · ${formatQuantity(part.stock_quantity)} ${part.unit} em estoque`,
+          })),
+        );
+      });
+
     this.serviceSearch$
       .pipe(
         debounceTime(200),
@@ -158,8 +187,31 @@ export class OrderBudget implements OnInit {
 
   // --- peças ------------------------------------------------------------------------
 
+  protected onStockQuery(search: string): void {
+    this.stockSearch$.next(search.trim());
+  }
+
+  /** Peça do estoque: nome, código e preço de venda vêm do catálogo. */
+  protected addStockPart(option: ComboboxOption): void {
+    const part = this.stockParts.find((item) => String(item.id) === option.code);
+    if (!part) return;
+    this.parts.update((parts) => [
+      ...parts,
+      {
+        key: ++nextKey,
+        id: null,
+        part_id: part.id,
+        name: part.name,
+        part_number: part.part_number ?? '',
+        quantity: '1',
+        unit_price: part.price_cents === null ? '' : centsToInput(part.price_cents),
+      },
+    ]);
+    setTimeout(() => document.querySelector<HTMLInputElement>('.part:last-child .part__qty')?.select());
+  }
+
   protected addPart(): void {
-    this.parts.update((parts) => [...parts, { key: ++nextKey, id: null, name: '', part_number: '', quantity: '1', unit_price: '' }]);
+    this.parts.update((parts) => [...parts, { key: ++nextKey, id: null, part_id: null, name: '', part_number: '', quantity: '1', unit_price: '' }]);
     setTimeout(() => document.querySelector<HTMLInputElement>('.part:last-child .part__name')?.focus());
   }
 
@@ -167,7 +219,7 @@ export class OrderBudget implements OnInit {
     this.parts.update((parts) => parts.filter((part) => part.key !== key));
   }
 
-  protected updatePart(key: number, changes: Partial<Omit<PartDraft, 'key' | 'id'>>): void {
+  protected updatePart(key: number, changes: Partial<Omit<PartDraft, 'key' | 'id' | 'part_id'>>): void {
     this.parts.update((parts) => parts.map((part) => (part.key === key ? { ...part, ...changes } : part)));
   }
 
@@ -215,7 +267,7 @@ export class OrderBudget implements OnInit {
         price_cents: priceToCents(item.price),
       })),
       parts: this.parts().map((part) => ({
-        ...(part.id ? { id: part.id } : {}),
+        ...(part.id ? { id: part.id } : { part_id: part.part_id }),
         name: part.name.trim(),
         part_number: part.part_number.trim(),
         quantity: parseQuantity(part.quantity),
@@ -262,6 +314,7 @@ export class OrderBudget implements OnInit {
       (order.parts ?? []).map((part) => ({
         key: ++nextKey,
         id: part.id,
+        part_id: part.part_id,
         name: part.name,
         part_number: part.part_number ?? '',
         quantity: formatQuantity(part.quantity),

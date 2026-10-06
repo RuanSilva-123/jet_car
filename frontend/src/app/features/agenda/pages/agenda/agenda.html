@@ -1,0 +1,105 @@
+<section class="page-header">
+  <div>
+    <h1>Agenda</h1>
+    <p>Horários marcados. Quando o carro chega, o agendamento vira OS.</p>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <app-icon name="plus" />
+    Novo agendamento
+  </button>
+</section>
+
+<div class="week-nav card">
+  <div class="week-nav__buttons">
+    <button type="button" class="btn btn--icon" (click)="shiftWeek(-1)" aria-label="Semana anterior"><app-icon name="chevron-left" /></button>
+    <button type="button" class="btn btn--ghost btn--sm" (click)="goToToday()">Hoje</button>
+    <button type="button" class="btn btn--icon" (click)="shiftWeek(1)" aria-label="Próxima semana"><app-icon name="chevron-right" /></button>
+  </div>
+  <strong class="week-nav__title">{{ weekStart() | date: "dd 'de' MMM" }} – {{ weekEnd() | date: "dd 'de' MMM 'de' yyyy" }}</strong>
+  <span class="week-nav__count">
+    @if (loading()) {
+      <span class="spinner spinner--dark"></span>
+    } @else {
+      {{ total() }} {{ total() === 1 ? 'agendamento' : 'agendamentos' }}
+    }
+  </span>
+  <label class="checkbox">
+    <input type="checkbox" [checked]="showClosed()" (change)="showClosed.set($any($event.target).checked)" />
+    Mostrar cancelados
+  </label>
+</div>
+
+<div class="days">
+  @for (day of days(); track day.key) {
+    <section class="day card" [class.is-today]="day.isToday" [class.is-past]="day.key < today">
+      <header class="day__header">
+        <div>
+          <strong>{{ day.date | date: 'EEEE' }}</strong>
+          <span>{{ day.date | date: 'dd/MM' }}</span>
+        </div>
+        @if (day.key >= today) {
+          <button type="button" class="btn btn--icon" (click)="openCreateOn(day.key)" [attr.aria-label]="'Agendar em ' + (day.date | date: 'dd/MM')" title="Agendar neste dia">
+            <app-icon name="plus" [size]="16" />
+          </button>
+        }
+      </header>
+
+      @for (item of day.items; track item.id) {
+        <article class="appointment tone-{{ statusMeta[item.status].tone }}" [class.is-closed]="!isOpen(item)">
+          <div class="appointment__time">
+            <strong>{{ item.scheduled_at | date: 'HH:mm' }}</strong>
+            <small>{{ item.ends_at | date: 'HH:mm' }}</small>
+          </div>
+          <div class="appointment__body">
+            <div class="appointment__title">
+              <strong>{{ item.customer.name }}</strong>
+              <span class="status">{{ item.status_label }}</span>
+            </div>
+            @if (item.vehicle) {
+              <small>
+                {{ item.vehicle.brand }} {{ item.vehicle.model }}
+                @if (item.vehicle.plate) {
+                  · <span class="plate">{{ item.vehicle.plate | brFormat: 'plate' }}</span>
+                }
+              </small>
+            }
+            @if (item.notes) {
+              <p class="appointment__notes">{{ item.notes }}</p>
+            }
+
+            <div class="appointment__actions">
+              @if (item.service_order) {
+                <a class="btn btn--ghost btn--sm" [routerLink]="['/service-orders', item.service_order.id]">
+                  <app-icon name="clipboard" [size]="14" /> OS #{{ item.service_order.number }}
+                </a>
+              }
+              @if (isOpen(item)) {
+                <button type="button" class="btn btn--primary btn--sm" (click)="checkingIn.set(item)" [disabled]="busy() === item.id">
+                  <app-icon name="car" [size]="14" /> Carro chegou
+                </button>
+                @if (item.status === 'scheduled') {
+                  <button type="button" class="btn btn--ghost btn--sm" (click)="setStatus(item, 'confirmed')" [disabled]="busy() === item.id">Confirmar</button>
+                }
+                @if (item.customer.phone_is_whatsapp) {
+                  <a class="btn btn--icon" [href]="whatsappLink(item)" target="_blank" rel="noopener" title="Confirmar pelo WhatsApp" aria-label="WhatsApp">
+                    <app-icon name="whatsapp" [size]="16" />
+                  </a>
+                }
+                <button type="button" class="btn btn--icon" (click)="openEdit(item)" title="Editar" aria-label="Editar"><app-icon name="pencil" [size]="15" /></button>
+                <button type="button" class="btn btn--icon" (click)="setStatus(item, 'no_show')" title="Não compareceu" aria-label="Não compareceu"><app-icon name="x-circle" [size]="15" /></button>
+                <button type="button" class="btn btn--icon is-danger" (click)="setStatus(item, 'canceled')" title="Cancelar" aria-label="Cancelar"><app-icon name="trash" [size]="15" /></button>
+              } @else if (item.status === 'no_show' || item.status === 'canceled') {
+                <button type="button" class="link-button" (click)="setStatus(item, 'scheduled')" [disabled]="busy() === item.id">Reagendar</button>
+              }
+            </div>
+          </div>
+        </article>
+      } @empty {
+        <p class="day__empty">Livre</p>
+      }
+    </section>
+  }
+</div>
+
+<app-appointment-dialog [open]="formOpen()" [appointment]="editing()" [prefill]="prefill()" (saved)="onSaved($event)" (closed)="formOpen.set(false)" />
+<app-check-in-dialog [open]="checkingIn() !== null" [appointment]="checkingIn()" (checkedIn)="onCheckedIn($event)" (closed)="checkingIn.set(null)" />

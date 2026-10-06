@@ -133,6 +133,8 @@
               <div class="part" role="row" [class.is-unpriced]="!part.unit_price.trim()">
                 <input
                   class="part__name"
+                  [class.is-stock]="part.part_id"
+                  [title]="part.part_id ? 'Peça do estoque' : ''"
                   [value]="part.name"
                   (input)="updatePart(part.key, { name: $any($event.target).value })"
                   placeholder="Ex.: Amortecedor dianteiro"
@@ -178,9 +180,21 @@
         @if (errorFor('parts'); as error) {
           <small class="field__error">{{ error }}</small>
         }
-        <div>
+        <div class="parts-add">
+          <app-combobox
+            class="parts-add__stock"
+            inputId="budget-stock-part"
+            [remote]="true"
+            [options]="stockOptions()"
+            [value]="null"
+            [loading]="searchingStock()"
+            placeholder="Incluir peça do estoque"
+            emptyText="Nenhuma peça ativa no estoque"
+            (queryChange)="onStockQuery($event)"
+            (selected)="addStockPart($event)"
+          />
           <button type="button" class="btn btn--ghost btn--sm" (click)="addPart()">
-            <app-icon name="plus" [size]="16" /> Incluir peça
+            <app-icon name="plus" [size]="16" /> Peça avulsa
           </button>
         </div>
       </div>

@@ -20,6 +20,9 @@ export interface LaborService {
   category_label: string;
   description: string | null;
   is_active: boolean;
+  /** Revisão: "a cada X meses ou Y km" (null = sem lembrete). */
+  reminder_months: number | null;
+  reminder_km: number | null;
   created_at: string | null;
   updated_at: string | null;
 }
@@ -29,6 +32,8 @@ export interface LaborServicePayload {
   category: ServiceCategory;
   description: string;
   is_active: boolean;
+  reminder_months: number | null;
+  reminder_km: number | null;
 }
 
 /** Mesma ordem e rótulos do backend (App\Enums\ServiceCategory). */

@@ -102,6 +102,14 @@
                         @if (service.description) {
                           <small [title]="service.description">{{ service.description }}</small>
                         }
+                        @if (service.reminder_months || service.reminder_km) {
+                          <small class="reminder-info">
+                            Revisão a cada
+                            {{ service.reminder_months ? service.reminder_months + (service.reminder_months === 1 ? ' mês' : ' meses') : '' }}
+                            {{ service.reminder_months && service.reminder_km ? 'ou' : '' }}
+                            {{ service.reminder_km ? (service.reminder_km | brFormat: 'mileage') + ' km' : '' }}
+                          </small>
+                        }
                       </span>
                     </div>
                   </td>

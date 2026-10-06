@@ -55,6 +55,30 @@
         }
       </div>
 
+      <fieldset class="reminder">
+        <legend>Lembrete de revisão <span class="optional">(opcional)</span></legend>
+        <p>Para serviços que se repetem. O cliente entra na lista de contato quando vencer o que vier primeiro.</p>
+        <div class="reminder__fields">
+          <div class="field" [class.field--invalid]="errorFor('reminder_months')">
+            <label for="service-months">A cada</label>
+            <div class="field__control">
+              <input id="service-months" formControlName="reminder_months" appMask="digits" inputmode="numeric" maxlength="3" placeholder="6" />
+              <span class="field__suffix">meses</span>
+            </div>
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('reminder_km')">
+            <label for="service-km">ou a cada</label>
+            <div class="field__control">
+              <input id="service-km" formControlName="reminder_km" appMask="mileage" inputmode="numeric" placeholder="10.000" />
+              <span class="field__suffix">km</span>
+            </div>
+          </div>
+        </div>
+        @if (errorFor('reminder_months') || errorFor('reminder_km'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </fieldset>
+
       <label class="switch">
         <input type="checkbox" formControlName="is_active" />
         <span class="switch__track"></span>

@@ -20,10 +20,15 @@ export interface ServiceOrderItem {
   is_done: boolean;
   done_at: string | null;
   done_by: string | null;
+  /** Mecânico responsável. */
+  mechanic_id: number | null;
+  mechanic: string | null;
 }
 
 export interface ServiceOrderPart {
   id: number;
+  /** Peça do estoque (null = peça avulsa digitada na OS). */
+  part_id: number | null;
   name: string;
   part_number: string | null;
   quantity: number;
@@ -48,12 +53,41 @@ export interface ServiceOrderEvent {
     | 'budget_updated'
     | 'budget_sent'
     | 'budget_approved'
-    | 'budget_rejected';
+    | 'budget_rejected'
+    | 'item_assigned'
+    | 'payment_added'
+    | 'payment_removed'
+    | 'inspection'
+    | 'inspection_signed';
   description: string;
   from_status: ServiceOrderStatus | null;
   to_status: ServiceOrderStatus | null;
   user: string | null;
   created_at: string;
+}
+
+export type PaymentMethod = 'pix' | 'cash' | 'credit_card' | 'debit_card' | 'bank_transfer' | 'bank_slip' | 'other';
+export type PaymentStatus = 'none' | 'pending' | 'partial' | 'paid';
+
+export const PAYMENT_METHODS: { value: PaymentMethod; label: string }[] = [
+  { value: 'pix', label: 'Pix' },
+  { value: 'cash', label: 'Dinheiro' },
+  { value: 'credit_card', label: 'Cartão de crédito' },
+  { value: 'debit_card', label: 'Cartão de débito' },
+  { value: 'bank_transfer', label: 'Transferência' },
+  { value: 'bank_slip', label: 'Boleto' },
+  { value: 'other', label: 'Outro' },
+];
+
+export interface ServiceOrderPayment {
+  id: number;
+  method: PaymentMethod;
+  method_label: string;
+  amount_cents: number;
+  installments: number;
+  paid_at: string;
+  notes: string | null;
+  received_by: string | null;
 }
 
 export interface ServiceOrderCustomer {
@@ -101,6 +135,15 @@ export interface ServiceOrder {
   budget_approved_at: string | null;
   budget_approved_total_cents: number | null;
   budget_changed_after_approval: boolean;
+  paid_cents: number;
+  /** Quanto falta receber (negativo = pagou a mais). */
+  balance_cents: number;
+  payment_status: PaymentStatus;
+  payment_status_label: string;
+  /** Detalhe: link público do orçamento (cliente aprova sem login). */
+  public_budget_url?: string | null;
+  payments?: ServiceOrderPayment[];
+  inspection?: { exists: boolean; signed_at: string | null };
   /** Detalhe: serviços/peças ainda sem valor. */
   unpriced_count?: number;
   customer?: ServiceOrderCustomer;
@@ -125,7 +168,7 @@ export interface ServiceOrderEntryPayload {
 /** Montagem do orçamento: serviços, peças e desconto (valor null = "a definir"). */
 export interface ServiceOrderBudgetPayload {
   items: { id?: number | null; labor_service_id?: number | null; notes: string; price_cents: number | null }[];
-  parts: { id?: number | null; name: string; part_number: string; quantity: number; unit_price_cents: number | null }[];
+  parts: { id?: number | null; part_id?: number | null; name: string; part_number: string; quantity: number; unit_price_cents: number | null }[];
   discount_cents: number;
 }
 

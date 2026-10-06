@@ -15,6 +15,12 @@ export class AuthService {
   readonly user = this.currentUser.asReadonly();
   readonly isAuthenticated = computed(() => this.currentUser() !== null);
   readonly isMaster = computed(() => this.currentUser()?.role === 'master');
+  readonly isMechanic = computed(() => this.currentUser()?.role === 'mechanic');
+  /** Financeiro: toda a equipe, menos o mecânico (mesma regra da API: gate manage-finance). */
+  readonly canManageFinance = computed(() => {
+    const user = this.currentUser();
+    return !!user && (user.can_manage_finance ?? user.role !== 'mechanic');
+  });
 
   /**
    * Verifica se existe uma sessão válida no servidor (cookie HttpOnly).

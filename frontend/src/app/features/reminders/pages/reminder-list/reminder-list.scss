@@ -1,0 +1,96 @@
+.count {
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-brand);
+  color: #fff;
+  font-size: 11px;
+}
+
+.reminders {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.reminder {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  padding: 14px 20px;
+
+  & + & {
+    border-top: 1px solid var(--color-border);
+  }
+
+  &.is-overdue .reminder__icon {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+
+  &__main {
+    display: flex;
+    flex: 1 1 420px;
+    align-items: flex-start;
+    gap: 12px;
+    min-width: 0;
+  }
+
+  &__icon {
+    display: grid;
+    flex: none;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    background: var(--color-warning-soft);
+    color: var(--color-warning);
+  }
+
+  &__text {
+    display: grid;
+    flex: 1;
+    gap: 1px;
+    min-width: 0;
+
+    > strong {
+      font-weight: 600;
+    }
+
+    small {
+      color: var(--color-text-muted);
+      font-size: 12px;
+
+      strong {
+        color: var(--color-text);
+      }
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+  }
+}
+
+.contacted {
+  color: var(--color-success) !important;
+}
+
+.badge--overdue {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.whatsapp {
+  background: #25d366;
+  color: #fff;
+
+  &:hover {
+    background: #1ebe5b;
+  }
+}

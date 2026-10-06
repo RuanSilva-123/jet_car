@@ -22,6 +22,12 @@
       />
     </label>
 
+    @if (isMechanic()) {
+      <label class="checkbox">
+        <input type="checkbox" [checked]="onlyMine()" (change)="onlyMine.set($any($event.target).checked); page.set(1)" />
+        Só os meus serviços
+      </label>
+    }
     <div class="segmented" role="group" aria-label="Filtrar por status">
       @for (filter of statusFilters; track filter.value) {
         <button

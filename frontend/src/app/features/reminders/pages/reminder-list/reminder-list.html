@@ -1,0 +1,117 @@
+<section class="page-header">
+  <div>
+    <h1>Lembretes de revisão</h1>
+    <p>Clientes com serviço periódico vencendo. A lista é atualizada todo dia; o intervalo vem do cadastro de cada serviço.</p>
+  </div>
+  <button type="button" class="btn btn--ghost" (click)="refresh()" [disabled]="refreshing()">
+    @if (refreshing()) {
+      <span class="spinner spinner--dark"></span>
+    } @else {
+      <app-icon name="refresh" [size]="16" />
+    }
+    Atualizar agora
+  </button>
+</section>
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar</span>
+      <input type="search" placeholder="Cliente, placa ou serviço" [value]="search()" (input)="onSearch($any($event.target).value)" />
+    </label>
+    <div class="segmented" role="group" aria-label="Filtrar lembretes">
+      @for (filter of filters; track filter.value) {
+        <button type="button" [class.is-active]="status() === filter.value" [attr.aria-pressed]="status() === filter.value" (click)="onStatus(filter.value)">
+          {{ filter.label }}
+          @if (filter.value === 'open' && result()?.summary; as summary) {
+            <span class="count">{{ summary.pending + summary.contacted }}</span>
+          }
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (failed() && !result()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar os lembretes</strong>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="bell" /></span>
+          <strong>Ninguém para contatar agora</strong>
+          <p>Cadastre o intervalo de revisão nos serviços (ex.: troca de óleo a cada 6 meses ou 10 mil km). Quando um serviço feito estiver para vencer, o cliente aparece aqui.</p>
+        </div>
+      } @else {
+        <ul class="reminders">
+          @for (reminder of page.data; track reminder.id) {
+            <li class="reminder" [class.is-overdue]="reminder.is_overdue && (reminder.status === 'pending' || reminder.status === 'contacted')">
+              <div class="reminder__main">
+                <span class="reminder__icon"><app-icon name="bell" [size]="16" /></span>
+                <div class="reminder__text">
+                  <strong>{{ reminder.service_name }} · {{ reminder.customer.name }}</strong>
+                  <small>
+                    {{ reminder.vehicle.brand }} {{ reminder.vehicle.model }}
+                    @if (reminder.vehicle.plate) {
+                      · <span class="plate">{{ reminder.vehicle.plate | brFormat: 'plate' }}</span>
+                    }
+                    · {{ reminder.customer.phone | brFormat: 'phone' }}
+                  </small>
+                  <small>
+                    Feito em {{ reminder.last_done_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+                    @if (reminder.last_mileage !== null) {
+                      com {{ reminder.last_mileage | brFormat: 'mileage' }} km
+                    }
+                    → vence
+                    @if (reminder.due_at) {
+                      em <strong>{{ reminder.due_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}</strong>
+                    }
+                    @if (reminder.due_at && reminder.due_mileage) {
+                      ou
+                    }
+                    @if (reminder.due_mileage) {
+                      aos <strong>{{ reminder.due_mileage | brFormat: 'mileage' }} km</strong>
+                    }
+                  </small>
+                  @if (reminder.contacted_at) {
+                    <small class="contacted">{{ reminder.status_label }} · {{ reminder.contacted_at | date: "dd/MM 'às' HH:mm" }}{{ reminder.contacted_by ? ' por ' + reminder.contacted_by : '' }}</small>
+                  }
+                </div>
+                @if (reminder.is_overdue && (reminder.status === 'pending' || reminder.status === 'contacted')) {
+                  <span class="badge badge--overdue">Vencido</span>
+                } @else {
+                  <span class="badge">{{ reminder.status_label }}</span>
+                }
+              </div>
+
+              <div class="reminder__actions">
+                @if (reminder.status === 'pending' || reminder.status === 'contacted') {
+                  @if (reminder.customer.phone_is_whatsapp) {
+                    <a class="btn btn--sm whatsapp" [href]="whatsappLink(reminder)" target="_blank" rel="noopener" (click)="contactByWhatsapp(reminder)">
+                      <app-icon name="whatsapp" [size]="14" /> WhatsApp
+                    </a>
+                  }
+                  <button type="button" class="btn btn--primary btn--sm" (click)="schedule(reminder)"><app-icon name="calendar" [size]="14" /> Agendar</button>
+                  @if (reminder.status === 'pending') {
+                    <button type="button" class="btn btn--ghost btn--sm" (click)="setStatus(reminder, 'contacted', 'Marcado como contatado.')" [disabled]="busy() === reminder.id">Contatado</button>
+                  }
+                  <button type="button" class="btn btn--icon is-danger" (click)="setStatus(reminder, 'dismissed', 'Lembrete descartado.')" [disabled]="busy() === reminder.id" title="Descartar" aria-label="Descartar">
+                    <app-icon name="close" [size]="15" />
+                  </button>
+                } @else if (reminder.status === 'dismissed' || reminder.status === 'scheduled') {
+                  <button type="button" class="link-button" (click)="setStatus(reminder, 'pending', 'Lembrete de volta na lista.')" [disabled]="busy() === reminder.id">Voltar para a lista</button>
+                }
+              </div>
+            </li>
+          }
+        </ul>
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>

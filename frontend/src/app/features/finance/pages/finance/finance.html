@@ -1,0 +1,189 @@
+<section class="page-header">
+  <div>
+    <h1>Contas a receber</h1>
+    <p>OS aprovadas com saldo em aberto e o que entrou no caixa. O pagamento é registrado na própria OS.</p>
+  </div>
+  <div class="segmented" role="tablist" aria-label="Financeiro">
+    <button type="button" role="tab" [class.is-active]="tab() === 'receivables'" [attr.aria-selected]="tab() === 'receivables'" (click)="tab.set('receivables')">A receber</button>
+    <button type="button" role="tab" [class.is-active]="tab() === 'payments'" [attr.aria-selected]="tab() === 'payments'" (click)="tab.set('payments')">Recebimentos</button>
+  </div>
+</section>
+
+@if (tab() === 'receivables') {
+  @if (receivables()?.summary; as summary) {
+    <div class="tiles">
+      @for (item of scopes; track item.value) {
+        <button type="button" class="tile" [class.is-active]="scope() === item.value" (click)="setScope(item.value)" [attr.aria-pressed]="scope() === item.value">
+          <span class="tile__label">{{ item.label }}</span>
+          <strong class="tile__value" [class.is-alert]="item.value === 'delivered' && summary[item.value].balance_cents > 0">
+            {{ summary[item.value].balance_cents | money }}
+          </strong>
+          <small>{{ summary[item.value].count }} {{ summary[item.value].count === 1 ? 'OS' : 'OS' }} · {{ item.hint }}</small>
+        </button>
+      }
+    </div>
+  }
+
+  <article class="card list">
+    <div class="toolbar">
+      <label class="search">
+        <app-icon name="search" />
+        <span class="sr-only">Buscar</span>
+        <input type="search" placeholder="Cliente, placa ou nº da OS" [value]="search()" (input)="onSearch($any($event.target).value)" />
+      </label>
+    </div>
+
+    <div class="list__body" [class.is-loading]="loadingReceivables() && receivables()">
+      @if (loadingReceivables() && !receivables()) {
+        <div class="list__state"><span class="spinner spinner--dark"></span></div>
+      } @else if (failed() && !receivables()) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="alert" /></span>
+          <strong>Não foi possível carregar as contas a receber</strong>
+        </div>
+      } @else if (receivables(); as page) {
+        @if (page.data.length === 0) {
+          <div class="empty-state">
+            <span class="empty-state__icon"><app-icon name="check" /></span>
+            <strong>Nada a receber{{ search() ? ' com essa busca' : '' }}</strong>
+            <p>Todas as OS aprovadas estão quitadas.</p>
+          </div>
+        } @else {
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>OS</th>
+                  <th>Cliente / veículo</th>
+                  <th>Situação</th>
+                  <th class="right">Total</th>
+                  <th class="right">Pago</th>
+                  <th class="right">Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (order of page.data; track order.id) {
+                  <tr class="is-clickable" [routerLink]="['/service-orders', order.id]">
+                    <td><strong>#{{ order.number }}</strong></td>
+                    <td>
+                      <span class="cell-text">
+                        <strong>{{ order.customer?.name }}</strong>
+                        <small>
+                          {{ order.vehicle?.brand }} {{ order.vehicle?.model }}
+                          @if (order.vehicle?.plate) {
+                            · {{ order.vehicle!.plate | brFormat: 'plate' }}
+                          }
+                        </small>
+                      </span>
+                    </td>
+                    <td>
+                      <app-status-badge [status]="order.status" />
+                      @if (order.status === 'delivered' && daysSince(order.delivered_at); as days) {
+                        <small class="overdue">há {{ days }} {{ days === 1 ? 'dia' : 'dias' }}</small>
+                      }
+                    </td>
+                    <td class="right">{{ order.total_cents | money }}</td>
+                    <td class="right muted">{{ order.paid_cents | money }}</td>
+                    <td class="right"><strong class="balance">{{ order.balance_cents | money }}</strong></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <app-pagination [meta]="page.meta" (pageChange)="goToReceivables($event)" />
+        }
+      }
+    </div>
+  </article>
+} @else {
+  <article class="card list">
+    <div class="toolbar">
+      <div class="range">
+        <label>
+          <span class="sr-only">De</span>
+          <input type="date" [value]="from()" (change)="setRange('from', $any($event.target).value)" />
+        </label>
+        <span class="muted">até</span>
+        <label>
+          <span class="sr-only">Até</span>
+          <input type="date" [value]="to()" (change)="setRange('to', $any($event.target).value)" />
+        </label>
+        <div class="presets">
+          <button type="button" class="link-button" (click)="setPreset('month')">Este mês</button>
+          <button type="button" class="link-button" (click)="setPreset('last-month')">Mês passado</button>
+          <button type="button" class="link-button" (click)="setPreset('last-30')">30 dias</button>
+        </div>
+      </div>
+      <label class="category-filter">
+        <span class="sr-only">Forma de pagamento</span>
+        <select [value]="method()" (change)="setMethod($any($event.target).value)">
+          <option value="all">Todas as formas</option>
+          @for (option of methods; track option.value) {
+            <option [value]="option.value" [selected]="option.value === method()">{{ option.label }}</option>
+          }
+        </select>
+      </label>
+    </div>
+
+    @if (payments(); as page) {
+      <div class="by-method">
+        <div class="by-method__total">
+          <span>Recebido no período</span>
+          <strong>{{ page.summary.total_cents | money }}</strong>
+          <small>{{ page.summary.count }} {{ page.summary.count === 1 ? 'pagamento' : 'pagamentos' }}</small>
+        </div>
+        <ul>
+          @for (row of page.summary.by_method; track row.method) {
+            <li>
+              <span class="by-method__name">{{ row.method_label }}</span>
+              <span class="by-method__bar"><span [style.width.%]="share(row.total_cents)"></span></span>
+              <strong>{{ row.total_cents | money }}</strong>
+            </li>
+          }
+        </ul>
+      </div>
+
+      <div class="list__body" [class.is-loading]="loadingPayments()">
+        @if (page.data.length === 0) {
+          <div class="empty-state">
+            <span class="empty-state__icon"><app-icon name="wallet" /></span>
+            <strong>Nenhum recebimento no período</strong>
+          </div>
+        } @else {
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>Data</th>
+                  <th>OS / cliente</th>
+                  <th>Forma</th>
+                  <th>Recebido por</th>
+                  <th class="right">Valor</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (payment of page.data; track payment.id) {
+                  <tr class="is-clickable" [routerLink]="['/service-orders', payment.order.id]">
+                    <td>{{ payment.paid_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}</td>
+                    <td>
+                      <span class="cell-text">
+                        <strong>#{{ payment.order.number }} · {{ payment.order.customer }}</strong>
+                        <small>{{ payment.order.vehicle }}{{ payment.order.plate ? ' · ' + (payment.order.plate | brFormat: 'plate') : '' }}</small>
+                      </span>
+                    </td>
+                    <td>{{ payment.method_label }}{{ payment.installments > 1 ? ' em ' + payment.installments + 'x' : '' }}</td>
+                    <td class="muted">{{ payment.received_by ?? '—' }}</td>
+                    <td class="right"><strong>{{ payment.amount_cents | money }}</strong></td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <app-pagination [meta]="page.meta" (pageChange)="goToPayments($event)" />
+        }
+      </div>
+    } @else {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    }
+  </article>
+}

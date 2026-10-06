@@ -115,3 +115,7 @@ tr.is-inactive .service__icon {
   display: inline-flex;
   gap: 2px;
 }
+
+.service__text small.reminder-info {
+  color: var(--color-warning);
+}

@@ -1,0 +1,142 @@
+<section class="page-header">
+  <div>
+    <h1>Estoque de peças</h1>
+    <p>Custo, preço de venda e quantidade. A peça sai do estoque quando entra numa OS.</p>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <app-icon name="plus" />
+    Nova peça
+  </button>
+</section>
+
+@if (result()?.summary?.low_stock; as low) {
+  @if (status() !== 'low') {
+    <button type="button" class="low-banner" (click)="onStatus('low')">
+      <app-icon name="alert" />
+      <span><strong>{{ low }} {{ low === 1 ? 'peça está' : 'peças estão' }} com estoque baixo.</strong> Ver lista de reposição</span>
+      <app-icon name="arrow-right" [size]="16" />
+    </button>
+  }
+}
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar peças</span>
+      <input type="search" placeholder="Buscar por nome, código ou marca" [value]="search()" (input)="onSearch($any($event.target).value)" />
+    </label>
+
+    <div class="segmented" role="group" aria-label="Filtrar peças">
+      @for (filter of statusFilters; track filter.value) {
+        <button type="button" [class.is-active]="status() === filter.value" [attr.aria-pressed]="status() === filter.value" (click)="onStatus(filter.value)">
+          {{ filter.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (loadError()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar o estoque</strong>
+        <p>Verifique sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="reload()">Tentar novamente</button>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon [name]="hasFilters() ? 'search' : 'boxes'" /></span>
+          @if (hasFilters()) {
+            <strong>{{ status() === 'low' ? 'Nenhuma peça com estoque baixo' : 'Nenhuma peça encontrada' }}</strong>
+            <p>Tente outro termo ou limpe os filtros.</p>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="clearFilters()">Limpar filtros</button>
+          } @else {
+            <strong>Nenhuma peça cadastrada</strong>
+            <p>Cadastre as peças que a oficina mantém em estoque para dar baixa automática nas OS.</p>
+            <button type="button" class="btn btn--primary btn--sm" (click)="openCreate()"><app-icon name="plus" [size]="16" /> Cadastrar peça</button>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Peça</th>
+                <th class="right">Custo</th>
+                <th class="right">Venda</th>
+                <th class="right">Em estoque</th>
+                <th class="data-table__actions"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (part of page.data; track part.id) {
+                <tr class="is-clickable" [class.is-inactive]="!part.is_active" (click)="stockPart.set(part)">
+                  <td>
+                    <div class="service">
+                      <span class="service__icon" [class.is-low]="part.is_low_stock"><app-icon name="boxes" [size]="16" /></span>
+                      <span class="service__text">
+                        <strong>{{ part.name }}</strong>
+                        <small>{{ details(part) }}</small>
+                      </span>
+                    </div>
+                  </td>
+                  <td class="right">{{ part.cost_cents === null ? '—' : (part.cost_cents | money) }}</td>
+                  <td class="right">
+                    {{ part.price_cents === null ? '—' : (part.price_cents | money) }}
+                    @if (part.margin_percent !== null) {
+                      <small class="margin">{{ part.margin_percent | brFormat: 'quantity' }}%</small>
+                    }
+                  </td>
+                  <td class="right">
+                    <span class="stock" [class.is-low]="part.is_low_stock">
+                      {{ stock(part.stock_quantity) }} {{ part.unit }}
+                    </span>
+                    @if (part.is_low_stock) {
+                      <small class="stock-note">mín. {{ part.min_stock | brFormat: 'quantity' }}</small>
+                    }
+                  </td>
+                  <td class="data-table__actions" (click)="$event.stopPropagation()">
+                    <div class="actions">
+                      <button type="button" class="btn btn--icon" title="Entrada / ajuste de estoque" [attr.aria-label]="'Movimentar estoque de ' + part.name" (click)="stockPart.set(part)">
+                        <app-icon name="plus" [size]="16" />
+                      </button>
+                      <button type="button" class="btn btn--icon" title="Editar" [attr.aria-label]="'Editar ' + part.name" (click)="openEdit(part)">
+                        <app-icon name="pencil" [size]="16" />
+                      </button>
+                      @if (canDelete()) {
+                        <button type="button" class="btn btn--icon is-danger" title="Excluir" [attr.aria-label]="'Excluir ' + part.name" (click)="pendingDelete.set(part)">
+                          <app-icon name="trash" [size]="16" />
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>
+
+<app-part-form-dialog [open]="formOpen()" [part]="editing()" (saved)="reload()" (closed)="formOpen.set(false)" />
+<app-stock-dialog [open]="stockPart() !== null" [part]="stockPart()" (saved)="reload()" (closed)="stockPart.set(null)" />
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir peça?"
+  [message]="'“' + (pendingDelete()?.name ?? '') + '” sairá do estoque. As OS antigas continuam mostrando a peça. Se só parou de vender, prefira desativar.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>

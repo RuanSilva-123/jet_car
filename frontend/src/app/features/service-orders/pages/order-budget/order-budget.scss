@@ -336,3 +336,20 @@
     color: var(--color-success);
   }
 }
+
+// Incluir peça: do estoque (busca) ou avulsa
+.parts-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+
+  &__stock {
+    flex: 1 1 280px;
+    min-width: 0;
+  }
+}
+
+.part__name.is-stock {
+  border-left: 3px solid var(--color-brand) !important;
+}

@@ -44,7 +44,18 @@ export type IconName =
   | 'message'
   | 'play'
   | 'external'
-  | 'download';
+  | 'download'
+  | 'bar-chart'
+  | 'bell'
+  | 'camera'
+  | 'fuel'
+  | 'credit-card'
+  | 'signature'
+  | 'refresh'
+  | 'link'
+  | 'boxes'
+  | 'x-circle'
+  | 'file';
 
 /** Ícones SVG em traço (estilo Lucide), herdam a cor do texto via currentColor. */
 @Component({
@@ -236,6 +247,52 @@ export type IconName =
         @case ('package') {
           <path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z" />
           <path d="m3.3 7 8.7 5 8.7-5M12 22V12" />
+        }
+        @case ('bar-chart') {
+          <path d="M3 3v18h18" />
+          <path d="M18 17V9M13 17V5M8 17v-3" />
+        }
+        @case ('bell') {
+          <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+          <path d="M10.3 21a1.94 1.94 0 0 0 3.4 0" />
+        }
+        @case ('camera') {
+          <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z" />
+          <circle cx="12" cy="13" r="3" />
+        }
+        @case ('fuel') {
+          <path d="M3 22h12M4 9h10M14 22V4a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v18" />
+          <path d="M14 13h2a2 2 0 0 1 2 2v2a2 2 0 0 0 4 0V9.83a2 2 0 0 0-.59-1.42L18 5" />
+        }
+        @case ('credit-card') {
+          <rect x="2" y="5" width="20" height="14" rx="2" />
+          <path d="M2 10h20" />
+        }
+        @case ('signature') {
+          <path d="m21 17-2.16-2.16a1.5 1.5 0 0 0-2.12 0L15 16.56a1.5 1.5 0 0 1-2.12 0L12 15.7" />
+          <path d="M3 21c3 0 7-1 7-8V5a2 2 0 0 0-4 0v1c0 6 4 10 6 10" />
+          <path d="M3 21h18" />
+        }
+        @case ('refresh') {
+          <path d="M3 12a9 9 0 0 1 15-6.7L21 8M21 3v5h-5M21 12a9 9 0 0 1-15 6.7L3 16M3 21v-5h5" />
+        }
+        @case ('link') {
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        }
+        @case ('boxes') {
+          <path d="M2.97 12.92A2 2 0 0 0 2 14.63v3.24a2 2 0 0 0 .97 1.71l3 1.8a2 2 0 0 0 2.06 0L12 19v-5.5l-5-3-4.03 2.42Z" />
+          <path d="m7 16.5-4.74-2.85M7 16.5l5-3M7 16.5v5.17M12 13.5V19l3.97 2.38a2 2 0 0 0 2.06 0l3-1.8a2 2 0 0 0 .97-1.71v-3.24a2 2 0 0 0-.97-1.71L17 10.5l-5 3Z" />
+          <path d="m17 16.5-5-3M17 16.5l4.74-2.85M17 16.5v5.17M7.97 4.42A2 2 0 0 0 7 6.13v4.37l5 3 5-3V6.13a2 2 0 0 0-.97-1.71l-3-1.8a2 2 0 0 0-2.06 0l-3 1.8Z" />
+          <path d="M12 8 7.26 5.15M12 8l4.74-2.85M12 13.5V8" />
+        }
+        @case ('x-circle') {
+          <circle cx="12" cy="12" r="10" />
+          <path d="m15 9-6 6M9 9l6 6" />
+        }
+        @case ('file') {
+          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4M10 9H8M16 13H8M16 17H8" />
         }
       }
     </svg>

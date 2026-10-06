@@ -1,0 +1,253 @@
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else if (order(); as order) {
+  <section class="page-header">
+    <div>
+      <a [routerLink]="['/service-orders', order.id]" class="back-link"><app-icon name="arrow-left" [size]="14" /> OS #{{ order.number }}</a>
+      <h1>Vistoria de entrada</h1>
+      <p>
+        {{ order.vehicle?.brand }} {{ order.vehicle?.model }}
+        @if (order.vehicle?.plate) {
+          · <span class="plate">{{ order.vehicle!.plate | brFormat: 'plate' }}</span>
+        }
+        · {{ order.customer?.name }}
+      </p>
+    </div>
+    <div class="header-actions">
+      @if (saved() && pdfUrl(); as url) {
+        <a class="btn btn--ghost" [href]="url" target="_blank" rel="noopener"><app-icon name="file" [size]="16" /> PDF da vistoria</a>
+      }
+      @if (!locked()) {
+        <button type="button" class="btn btn--primary" (click)="save()" [disabled]="saving()">
+          @if (saving()) {
+            <span class="spinner"></span>
+          } @else {
+            <app-icon name="check" [size]="16" />
+          }
+          Salvar vistoria
+        </button>
+      }
+    </div>
+  </section>
+
+  @if (locked()) {
+    <div class="banner banner--success">
+      <app-icon name="signature" />
+      <span>Vistoria assinada por <strong>{{ signedName() }}</strong> em {{ signedAt() | date: "dd/MM/yyyy 'às' HH:mm" }}. Não pode mais ser alterada.</span>
+    </div>
+  } @else if (dirty()) {
+    <div class="banner banner--warning">
+      <app-icon name="alert" />
+      <span>Há alterações não salvas.</span>
+    </div>
+  }
+
+  @if (error(); as message) {
+    <div class="form-alert form-alert--page" role="alert"><app-icon name="alert" /> <span>{{ message }}</span></div>
+  }
+
+  <div class="grid">
+    <!-- Combustível e itens -->
+    <article class="card section">
+      <header class="card__header">
+        <h2><app-icon name="fuel" [size]="16" /> Combustível</h2>
+        <p>Nível do tanque na chegada.</p>
+      </header>
+      <div class="fuel" role="radiogroup" aria-label="Nível de combustível">
+        @for (level of options()?.fuel_levels ?? []; track $index) {
+          <button
+            type="button"
+            role="radio"
+            class="fuel__step"
+            [class.is-filled]="fuelLevel() !== null && $index <= fuelLevel()!"
+            [class.is-selected]="fuelLevel() === $index"
+            [attr.aria-checked]="fuelLevel() === $index"
+            [disabled]="locked()"
+            (click)="setFuel($index)"
+          >
+            <span class="fuel__bar"></span>
+            <small>{{ level }}</small>
+          </button>
+        }
+      </div>
+
+      <header class="card__header">
+        <h2><app-icon name="check" [size]="16" /> Itens conferidos</h2>
+        <p>Marque o que está no veículo.</p>
+      </header>
+      <div class="chips">
+        @for (item of checklistOptions(); track item.value) {
+          <button type="button" class="chip" [class.is-on]="checklist().includes(item.value)" [attr.aria-pressed]="checklist().includes(item.value)" [disabled]="locked()" (click)="toggleCheck(item.value)">
+            <app-icon [name]="checklist().includes(item.value) ? 'check' : locked() ? 'close' : 'plus'" [size]="14" />
+            {{ item.label }}
+          </button>
+        }
+      </div>
+    </article>
+
+    <!-- Avarias -->
+    <article class="card section">
+      <header class="card__header card__header--row">
+        <div>
+          <h2><app-icon name="alert" [size]="16" /> Avarias</h2>
+          <p>Riscos, amassados, trincas… o que já veio no carro.</p>
+        </div>
+        @if (!locked()) {
+          <button type="button" class="btn btn--ghost btn--sm" (click)="addDamage()"><app-icon name="plus" [size]="16" /> Adicionar</button>
+        }
+      </header>
+
+      @if (damages().length) {
+        <ul class="damages">
+          @for (damage of damages(); track $index; let index = $index) {
+            <li class="damage">
+              <span class="damage__index">{{ index + 1 }}</span>
+              @if (locked()) {
+                <span class="damage__text">
+                  <strong>{{ label(options()?.damage_areas, damage.area) }} · {{ label(options()?.damage_types, damage.type) }}</strong>
+                  @if (damage.notes) {
+                    <small>{{ damage.notes }}</small>
+                  }
+                </span>
+              } @else {
+                <select [value]="damage.area" (change)="updateDamage(index, { area: $any($event.target).value })" aria-label="Local">
+                  @for (area of areas(); track area.value) {
+                    <option [value]="area.value" [selected]="area.value === damage.area">{{ area.label }}</option>
+                  }
+                </select>
+                <select [value]="damage.type" (change)="updateDamage(index, { type: $any($event.target).value })" aria-label="Tipo">
+                  @for (type of types(); track type.value) {
+                    <option [value]="type.value" [selected]="type.value === damage.type">{{ type.label }}</option>
+                  }
+                </select>
+                <input
+                  [value]="damage.notes ?? ''"
+                  (input)="updateDamage(index, { notes: $any($event.target).value })"
+                  placeholder="Detalhe (opcional)"
+                  maxlength="300"
+                  aria-label="Detalhe da avaria"
+                />
+                <button type="button" class="btn btn--icon is-danger" (click)="removeDamage(index)" aria-label="Remover avaria" title="Remover">
+                  <app-icon name="trash" [size]="15" />
+                </button>
+              }
+            </li>
+          }
+        </ul>
+      } @else {
+        <p class="empty">{{ locked() ? 'Nenhuma avaria registrada.' : 'Nenhuma avaria. Se o carro tiver marcas, registre aqui.' }}</p>
+      }
+    </article>
+
+    <!-- Pertences e observações -->
+    <article class="card section">
+      <header class="card__header">
+        <h2><app-icon name="package" [size]="16" /> Pertences e observações</h2>
+        <p>O que o cliente deixou no carro.</p>
+      </header>
+      <div class="texts">
+        <div class="field">
+          <label for="belongings">Pertences deixados no veículo</label>
+          <div class="field__control field__control--textarea">
+            <textarea id="belongings" rows="3" [value]="belongings()" (input)="setText('belongings', $any($event.target).value)" [readonly]="locked()" maxlength="2000" placeholder="Ex.: cadeirinha de bebê, óculos no porta-luvas"></textarea>
+          </div>
+        </div>
+        <div class="field">
+          <label for="inspection-notes">Observações</label>
+          <div class="field__control field__control--textarea">
+            <textarea id="inspection-notes" rows="3" [value]="notes()" (input)="setText('notes', $any($event.target).value)" [readonly]="locked()" maxlength="2000" placeholder="Ex.: luz de injeção acesa no painel"></textarea>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- Fotos -->
+    <article class="card section">
+      <header class="card__header card__header--row">
+        <div>
+          <h2><app-icon name="camera" [size]="16" /> Fotos</h2>
+          <p>Frente, traseira, laterais e detalhes das avarias.</p>
+        </div>
+        @if (!locked()) {
+          <label class="btn btn--ghost btn--sm upload">
+            @if (uploading() > 0) {
+              <span class="spinner spinner--dark"></span> Enviando…
+            } @else {
+              <app-icon name="camera" [size]="16" /> Adicionar fotos
+            }
+            <input type="file" accept="image/*" capture="environment" multiple (change)="onPhotos($event)" class="sr-only" />
+          </label>
+        }
+      </header>
+      @if (photos().length) {
+        <div class="photos">
+          @for (photo of photos(); track photo.id) {
+            <figure class="photo">
+              <a [href]="photo.url" target="_blank" rel="noopener"><img [src]="photo.url" [alt]="photo.caption ?? 'Foto da vistoria'" loading="lazy" /></a>
+              @if (!locked()) {
+                <button type="button" class="photo__remove" (click)="pendingPhotoRemoval.set(photo)" aria-label="Remover foto" title="Remover">
+                  <app-icon name="close" [size]="14" />
+                </button>
+              }
+            </figure>
+          }
+        </div>
+      } @else {
+        <p class="empty">Nenhuma foto ainda.</p>
+      }
+    </article>
+
+    <!-- Assinatura -->
+    <article class="card section signature">
+      <header class="card__header">
+        <h2><app-icon name="signature" [size]="16" /> Assinatura do cliente</h2>
+        <p>O cliente confere a vistoria e assina. Depois disso ela não muda mais.</p>
+      </header>
+
+      @if (locked()) {
+        <div class="signed">
+          @if (signatureUrl(); as url) {
+            <img [src]="url" alt="Assinatura do cliente" />
+          }
+          <strong>{{ signedName() }}</strong>
+          <small>{{ signedAt() | date: "dd/MM/yyyy 'às' HH:mm" }}</small>
+        </div>
+      } @else {
+        <div class="sign-form">
+          <app-signature-pad />
+          <div class="sign-form__row">
+            <div class="field">
+              <label for="signer">Nome de quem assina</label>
+              <div class="field__control">
+                <input id="signer" [value]="signerName()" (input)="signerName.set($any($event.target).value)" maxlength="120" />
+              </div>
+            </div>
+            <div class="sign-form__actions">
+              <button type="button" class="btn btn--ghost" (click)="clearSignature()">Limpar</button>
+              <button type="button" class="btn btn--primary" (click)="sign()" [disabled]="signing() || saving()">
+                @if (signing() || saving()) {
+                  <span class="spinner"></span>
+                } @else {
+                  <app-icon name="signature" [size]="16" />
+                }
+                Confirmar e assinar
+              </button>
+            </div>
+          </div>
+        </div>
+      }
+    </article>
+  </div>
+
+  <app-confirm-dialog
+    [open]="pendingPhotoRemoval() !== null"
+    title="Remover foto?"
+    message="A foto sai da vistoria."
+    confirmLabel="Remover"
+    icon="trash"
+    tone="danger"
+    [busy]="removingPhoto()"
+    (confirmed)="confirmPhotoRemoval()"
+    (cancelled)="pendingPhotoRemoval.set(null)"
+  />
+}

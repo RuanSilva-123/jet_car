@@ -34,6 +34,8 @@ Entre com o `MASTER_EMAIL` / `MASTER_PASSWORD` definidos em `backend/.env`.
 
 ## Comandos do dia a dia
 
+Depois de atualizar o código, rode `docker compose up -d --build` (a imagem do PHP ganhou a extensão `gd`) e `docker compose exec app php artisan migrate`. O container `scheduler` gera todo dia, às 6h, a lista de lembretes de revisão (`php artisan jetcar:service-reminders`).
+
 ```bash
 docker compose up -d                            # sobe o ambiente
 docker compose down                             # derruba (dados persistem nos volumes)

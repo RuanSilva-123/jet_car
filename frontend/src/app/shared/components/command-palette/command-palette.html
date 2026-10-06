@@ -1,0 +1,63 @@
+<dialog #dialog (cancel)="onCancel($event)" (click)="onBackdropClick($event)" aria-label="Busca global">
+  <div class="search-row">
+    <app-icon name="search" [size]="18" />
+    <input
+      #field
+      type="search"
+      [value]="query()"
+      (input)="onQuery($any($event.target).value)"
+      (keydown)="onKeydown($event)"
+      placeholder="Placa, cliente, telefone ou nº da OS"
+      aria-label="Buscar"
+      aria-controls="palette-list"
+      [attr.aria-activedescendant]="actions().length ? 'palette-item-' + active() : null"
+      autocomplete="off"
+      spellcheck="false"
+    />
+    @if (loading()) {
+      <span class="spinner spinner--dark"></span>
+    }
+    <kbd>Esc</kbd>
+  </div>
+
+  <div class="results" id="palette-list" role="listbox">
+    @for (group of groups(); track group.name) {
+      <p class="group">{{ group.name }}</p>
+      @for (entry of group.items; track entry.index) {
+        <button
+          type="button"
+          class="item"
+          role="option"
+          [id]="'palette-item-' + entry.index"
+          [class.is-active]="active() === entry.index"
+          [attr.aria-selected]="active() === entry.index"
+          (mousemove)="active.set(entry.index)"
+          (click)="go(entry.action)"
+        >
+          <span class="item__icon"><app-icon [name]="entry.action.icon" [size]="16" /></span>
+          <span class="item__text">
+            <strong>{{ entry.action.title }}</strong>
+            @if (entry.action.subtitle) {
+              <small>{{ entry.action.subtitle }}</small>
+            }
+          </span>
+          @if (entry.action.badge) {
+            <span class="badge">{{ entry.action.badge }}</span>
+          }
+          <app-icon class="item__go" name="arrow-right" [size]="14" />
+        </button>
+      }
+    } @empty {
+      @if (failed()) {
+        <p class="empty">Não foi possível buscar agora. Tente de novo.</p>
+      } @else if (!loading()) {
+        <p class="empty">Nada encontrado para “{{ query() }}”.</p>
+      }
+    }
+  </div>
+
+  <footer class="hints">
+    <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+    <span><kbd>Enter</kbd> abrir</span>
+  </footer>
+</dialog>

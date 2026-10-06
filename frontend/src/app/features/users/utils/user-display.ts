@@ -8,6 +8,7 @@ export interface RoleOption {
 
 export const ROLE_OPTIONS: RoleOption[] = [
   { value: 'admin', label: 'Administrador', description: 'Usa o painel no dia a dia.' },
+  { value: 'mechanic', label: 'Mecânico', description: 'Executa os serviços das OS. Não vê o financeiro.' },
   { value: 'master', label: 'Administrador Master', description: 'Acesso total, inclusive à gestão de usuários.' },
 ];
 

@@ -9,6 +9,7 @@ import { ToastService } from '../../../../core/services/toast.service';
 import { ConfirmDialog } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { Icon } from '../../../../shared/components/icon/icon';
 import { Pagination } from '../../../../shared/components/pagination/pagination';
+import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { ServiceFormDialog } from '../../components/service-form-dialog/service-form-dialog';
 import { LaborService, SERVICE_CATEGORIES, ServiceCategory } from '../../models/labor-service';
 import { LaborServiceQuery, LaborServicesService } from '../../services/labor-services.service';
@@ -17,7 +18,7 @@ const PER_PAGE = 20;
 
 @Component({
   selector: 'app-service-list',
-  imports: [Icon, ConfirmDialog, Pagination, ServiceFormDialog],
+  imports: [Icon, ConfirmDialog, Pagination, ServiceFormDialog, BrFormatPipe],
   templateUrl: './service-list.html',
   styleUrl: './service-list.scss',
   changeDetection: ChangeDetectionStrategy.OnPush,

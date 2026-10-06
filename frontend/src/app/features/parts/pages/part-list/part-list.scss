@@ -1,0 +1,45 @@
+.data-table {
+  .right {
+    text-align: right;
+  }
+}
+
+.service__icon.is-low {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.stock {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+
+  &.is-low {
+    color: var(--color-danger);
+  }
+}
+
+.margin,
+.stock-note {
+  display: block;
+  color: var(--color-text-muted);
+  font-size: 12px;
+}
+
+.low-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid rgb(185 28 28 / 0.2);
+  border-radius: var(--radius-md);
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+
+  span {
+    flex: 1;
+  }
+}

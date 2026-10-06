@@ -22,6 +22,11 @@ export default [
     loadComponent: () => import('./pages/order-budget/order-budget').then((m) => m.OrderBudget),
   },
   {
+    path: ':id/inspection',
+    title: 'Vistoria de entrada',
+    loadComponent: () => import('./pages/order-inspection/order-inspection').then((m) => m.OrderInspection),
+  },
+  {
     path: ':id/edit',
     title: 'Dados de entrada',
     loadComponent: () => import('./pages/order-form/order-form').then((m) => m.OrderForm),

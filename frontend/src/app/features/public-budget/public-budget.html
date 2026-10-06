@@ -1,0 +1,175 @@
+<div class="page">
+  <header class="brand">
+    <app-logo class="brand__logo" />
+  </header>
+
+  @if (loading()) {
+    <div class="card state"><span class="spinner spinner--dark"></span></div>
+  } @else if (loadError(); as kind) {
+    <div class="card state">
+      <span class="state__icon"><app-icon [name]="kind === 'expired' ? 'clock' : 'alert'" [size]="22" /></span>
+      <h1>{{ kind === 'expired' ? 'Este link expirou' : kind === 'invalid' ? 'Link inválido' : 'Não foi possível abrir o orçamento' }}</h1>
+      <p>
+        @if (kind === 'expired') {
+          O prazo deste orçamento acabou. Fale com a oficina para receber um novo.
+        } @else if (kind === 'invalid') {
+          Confira se o endereço foi copiado inteiro ou peça o link de novo à oficina.
+        } @else {
+          Verifique sua conexão e tente novamente.
+        }
+      </p>
+    </div>
+  } @else if (budget(); as budget) {
+    <main class="content">
+      <section class="intro">
+        <p class="eyebrow">{{ budget.shop.name }}</p>
+        <h1>Orçamento da OS #{{ budget.order.number }}</h1>
+        <p>
+          Olá, {{ budget.order.customer_first_name }}! Este é o orçamento para o seu
+          <strong>{{ budget.order.vehicle.brand }} {{ budget.order.vehicle.model }}</strong>
+          @if (budget.order.vehicle.plate) {
+            &nbsp;<span class="plate">{{ budget.order.vehicle.plate | brFormat: 'plate' }}</span>
+          }
+        </p>
+      </section>
+
+      @switch (budget.state) {
+        @case ('approved') {
+          <div class="banner banner--success">
+            <app-icon name="check" />
+            <span>
+              Orçamento aprovado{{ budget.order.budget_approved_at ? ' em ' + (budget.order.budget_approved_at | date: "dd/MM/yyyy 'às' HH:mm") : '' }}.
+              A oficina já pode fazer o serviço. Obrigado!
+            </span>
+          </div>
+        }
+        @case ('rejected') {
+          <div class="banner banner--info">
+            <app-icon name="message" />
+            <span>Você recusou este orçamento. A oficina vai entrar em contato para conversar.</span>
+          </div>
+        }
+        @case ('unavailable') {
+          <div class="banner">
+            <app-icon name="clock" />
+            <span>A oficina está revisando este orçamento. Você vai receber a versão atualizada.</span>
+          </div>
+        }
+      }
+
+      @if (budget.order.complaint) {
+        <article class="card block">
+          <h2>O que você relatou</h2>
+          <p>{{ budget.order.complaint }}</p>
+        </article>
+      }
+
+      <article class="card lines">
+        @if (budget.order.items.length) {
+          <h2>Serviços</h2>
+          <ul>
+            @for (item of budget.order.items; track $index) {
+              <li>
+                <span>
+                  <strong>{{ item.name }}</strong>
+                  @if (item.notes) {
+                    <small>{{ item.notes }}</small>
+                  }
+                </span>
+                <span class="value">{{ item.price_cents === null ? 'a definir' : (item.price_cents | money) }}</span>
+              </li>
+            }
+          </ul>
+        }
+        @if (budget.order.parts.length) {
+          <h2>Peças</h2>
+          <ul>
+            @for (part of budget.order.parts; track $index) {
+              <li>
+                <span>
+                  <strong>{{ part.name }}</strong>
+                  <small>{{ part.quantity | brFormat: 'quantity' }} × {{ part.unit_price_cents === null ? 'a definir' : (part.unit_price_cents | money) }}</small>
+                </span>
+                <span class="value">{{ part.total_cents === null ? '—' : (part.total_cents | money) }}</span>
+              </li>
+            }
+          </ul>
+        }
+
+        <dl class="totals">
+          <div><dt>Mão de obra</dt><dd>{{ budget.order.labor_total_cents | money }}</dd></div>
+          @if (budget.order.parts.length) {
+            <div><dt>Peças</dt><dd>{{ budget.order.parts_total_cents | money }}</dd></div>
+          }
+          @if (budget.order.discount_cents > 0) {
+            <div class="discount"><dt>Desconto</dt><dd>− {{ budget.order.discount_cents | money }}</dd></div>
+          }
+          <div class="grand"><dt>Total</dt><dd>{{ budget.order.total_cents | money }}</dd></div>
+        </dl>
+      </article>
+
+      @if (budget.state === 'awaiting') {
+        <article class="card decide">
+          @if (decision() === null) {
+            <h2>Podemos seguir com o serviço?</h2>
+            <div class="decide__buttons">
+              <button type="button" class="btn btn--ghost" (click)="choose('reject')"><app-icon name="close" [size]="16" /> Recusar</button>
+              <button type="button" class="btn btn--approve" (click)="choose('approve')"><app-icon name="check" [size]="16" /> Aprovar orçamento</button>
+            </div>
+          } @else if (decision() === 'approve') {
+            <h2>Aprovar {{ budget.order.total_cents | money }}?</h2>
+            <div class="field">
+              <label for="approver">Seu nome</label>
+              <div class="field__control">
+                <input id="approver" [value]="name()" (input)="name.set($any($event.target).value)" maxlength="120" autocomplete="name" />
+              </div>
+            </div>
+            <div class="decide__buttons">
+              <button type="button" class="btn btn--ghost" (click)="decision.set(null)" [disabled]="sending()">Voltar</button>
+              <button type="button" class="btn btn--approve" (click)="confirm()" [disabled]="sending()">
+                @if (sending()) {
+                  <span class="spinner"></span>
+                } @else {
+                  <app-icon name="check" [size]="16" />
+                }
+                Confirmar aprovação
+              </button>
+            </div>
+          } @else {
+            <h2>Recusar o orçamento</h2>
+            <div class="field">
+              <label for="reason">Quer contar o motivo? <span class="optional">(opcional)</span></label>
+              <div class="field__control field__control--textarea">
+                <textarea id="reason" rows="3" [value]="reason()" (input)="reason.set($any($event.target).value)" maxlength="1000" placeholder="Ex.: vou fazer só a troca de óleo agora"></textarea>
+              </div>
+            </div>
+            <div class="decide__buttons">
+              <button type="button" class="btn btn--ghost" (click)="decision.set(null)" [disabled]="sending()">Voltar</button>
+              <button type="button" class="btn btn--danger" (click)="confirm()" [disabled]="sending()">
+                @if (sending()) {
+                  <span class="spinner"></span>
+                }
+                Recusar orçamento
+              </button>
+            </div>
+          }
+          @if (error(); as message) {
+            <p class="decide__error" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+          }
+        </article>
+      }
+
+      <footer class="notes">
+        @if (budget.shop.budget_notes) {
+          <p>{{ budget.shop.budget_notes }}</p>
+        }
+        @if (budget.shop.warranty_text) {
+          <p>{{ budget.shop.warranty_text }}</p>
+        }
+        @if (shopWhatsapp(); as link) {
+          <a class="btn btn--ghost btn--sm" [href]="link" target="_blank" rel="noopener"><app-icon name="whatsapp" [size]="16" /> Falar com a oficina</a>
+        }
+      </footer>
+    </main>
+  }
+</div>

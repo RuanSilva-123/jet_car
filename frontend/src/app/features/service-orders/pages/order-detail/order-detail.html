@@ -194,6 +194,20 @@
                       }
                     </small>
                   }
+                  @if (mechanics().length && !order.is_final) {
+                    <label class="mechanic" [class.is-empty]="!item.mechanic_id">
+                      <app-icon name="user" [size]="13" />
+                      <span class="sr-only">Responsável por {{ item.name }}</span>
+                      <select [value]="item.mechanic_id ?? ''" (change)="assignMechanic(item, $any($event.target).value)" [disabled]="assigning() === item.id">
+                        <option value="">Sem responsável</option>
+                        @for (mechanic of mechanics(); track mechanic.id) {
+                          <option [value]="mechanic.id" [selected]="mechanic.id === item.mechanic_id">{{ mechanic.name }}</option>
+                        }
+                      </select>
+                    </label>
+                  } @else if (item.mechanic) {
+                    <small class="mechanic-name"><app-icon name="user" [size]="12" /> {{ item.mechanic }}</small>
+                  }
                 </div>
                 @if (item.price_cents === null) {
                   <span class="checklist__price tbd">a definir</span>
@@ -234,6 +248,31 @@
         </header>
 
         @if (canEdit()) {
+          <div class="stock-pick">
+            @if (stockPart(); as part) {
+              <p class="stock-pick__selected">
+                <app-icon name="boxes" [size]="16" />
+                <span>Do estoque: <strong>{{ part.name }}</strong> · {{ part.stock_quantity | brFormat: 'quantity' }} {{ part.unit }} disponível
+                  @if (part.price_cents !== null) {
+                    · {{ part.price_cents | money }}/{{ part.unit }}
+                  }
+                </span>
+                <button type="button" class="link-button" (click)="clearStockPart()">Trocar</button>
+              </p>
+            } @else {
+              <app-combobox
+                inputId="stock-part"
+                [remote]="true"
+                [options]="stockOptions()"
+                [value]="null"
+                [loading]="searchingStock()"
+                placeholder="Buscar peça no estoque (ou digite uma peça avulsa abaixo)"
+                emptyText="Nenhuma peça ativa no estoque"
+                (queryChange)="onStockQuery($event)"
+                (selected)="selectStockPart($event)"
+              />
+            }
+          </div>
           <form class="part-form" (submit)="$event.preventDefault(); addPart()" novalidate>
             <input
               id="part-name"
@@ -243,6 +282,7 @@
               placeholder="Peça, ex.: Amortecedor dianteiro"
               maxlength="150"
               aria-label="Nome da peça"
+              [readonly]="!!stockPart()"
             />
             <input
               [value]="partNumber()"
@@ -294,6 +334,9 @@
                       <strong>{{ part.name }}</strong>
                       @if (part.part_number) {
                         <small class="muted"> · Cód. {{ part.part_number }}</small>
+                      }
+                      @if (part.part_id) {
+                        <span class="stock-tag" title="Saiu do estoque">estoque</span>
                       }
                     </td>
                     <td class="center">{{ part.quantity | brFormat: 'quantity' }}</td>
@@ -419,6 +462,72 @@
         }
       </article>
 
+      <!-- Pagamento -->
+      @if (canManageFinance() && order.total_cents > 0 && order.status !== 'canceled') {
+        <article class="card info payment">
+          <h3>Pagamento</h3>
+          <div class="payment__status">
+            <span class="pay-badge pay-badge--{{ order.payment_status }}">{{ order.payment_status_label }}</span>
+            @if (order.balance_cents > 0) {
+              <span class="payment__balance">Falta <strong>{{ order.balance_cents | money }}</strong></span>
+            }
+          </div>
+          @if (order.paid_cents > 0) {
+            <div class="payment__bar" [attr.aria-label]="'Pago ' + (order.paid_cents | money) + ' de ' + (order.total_cents | money)">
+              <span [style.width.%]="(order.paid_cents / order.total_cents) * 100"></span>
+            </div>
+          }
+          @if (order.payments?.length) {
+            <ul class="payment__list">
+              @for (payment of order.payments; track payment.id) {
+                <li>
+                  <span>
+                    <strong>{{ payment.amount_cents | money }}</strong>
+                    <small>
+                      {{ payment.method_label }}{{ payment.installments > 1 ? ' em ' + payment.installments + 'x' : '' }} ·
+                      {{ payment.paid_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+                    </small>
+                  </span>
+                  @if (canRemovePayment()) {
+                    <button type="button" class="btn btn--icon is-danger" (click)="pendingPaymentRemoval.set(payment)" aria-label="Remover pagamento" title="Remover (estorno)">
+                      <app-icon name="trash" [size]="14" />
+                    </button>
+                  }
+                </li>
+              }
+            </ul>
+          }
+          @if (order.balance_cents > 0) {
+            <button type="button" class="btn btn--sm btn--primary" (click)="paymentOpen.set(true)">
+              <app-icon name="plus" [size]="14" /> Registrar pagamento
+            </button>
+          }
+        </article>
+      }
+
+      <!-- Vistoria de entrada -->
+      <article class="card info inspection-card">
+        <h3>Vistoria de entrada</h3>
+        @if (order.inspection?.signed_at) {
+          <p class="inspection-card__state is-signed"><app-icon name="signature" [size]="14" /> Assinada em {{ order.inspection!.signed_at | date: "dd/MM/yyyy 'às' HH:mm" }}</p>
+        } @else if (order.inspection?.exists) {
+          <p class="inspection-card__state"><app-icon name="alert" [size]="14" /> Registrada, falta a assinatura do cliente</p>
+        } @else {
+          <p class="inspection-card__state"><app-icon name="camera" [size]="14" /> Fotos, avarias, combustível e pertences</p>
+        }
+        <div class="inspection-card__actions">
+          <a [routerLink]="['/service-orders', order.id, 'inspection']" class="btn btn--sm" [class.btn--primary]="!order.inspection?.exists" [class.btn--ghost]="order.inspection?.exists">
+            <app-icon [name]="order.inspection?.exists ? 'eye' : 'camera'" [size]="14" />
+            {{ order.inspection?.exists ? 'Ver vistoria' : 'Fazer vistoria' }}
+          </a>
+          @if (order.inspection?.exists && inspectionPdf(); as pdf) {
+            <a class="btn btn--icon" [href]="pdf.view" target="_blank" rel="noopener" title="PDF da vistoria" aria-label="Abrir PDF da vistoria">
+              <app-icon name="external" [size]="16" />
+            </a>
+          }
+        </div>
+      </article>
+
       <!-- Documentos -->
       <article class="card info documents">
         <h3>Documentos</h3>
@@ -445,6 +554,14 @@
           <a class="btn btn--sm whatsapp-send" [href]="whatsappBudgetLink()" target="_blank" rel="noopener" (click)="onWhatsappSend()">
             <app-icon name="whatsapp" [size]="16" /> Enviar orçamento pelo WhatsApp
           </a>
+        }
+
+        @if (order.public_budget_url && awaitingDecision()) {
+          <div class="public-link">
+            <span><app-icon name="link" [size]="14" /> Link para o cliente aprovar</span>
+            <button type="button" class="link-button" (click)="copyBudgetLink()">{{ linkCopied() ? 'Copiado!' : 'Copiar link' }}</button>
+            <a class="link-button" [href]="order.public_budget_url" target="_blank" rel="noopener">Abrir</a>
+          </div>
         }
 
         @if (reportPdf(); as pdf) {
@@ -563,4 +680,20 @@
   />
 
   <app-service-form-dialog [open]="newServiceOpen()" (saved)="onServiceCreated($event)" (closed)="newServiceOpen.set(false)" />
+
+  @if (canManageFinance()) {
+    <app-payment-dialog [open]="paymentOpen()" [order]="order" (saved)="onPaymentSaved($event)" (closed)="paymentOpen.set(false)" />
+  }
+
+  <app-confirm-dialog
+    [open]="pendingPaymentRemoval() !== null"
+    title="Remover pagamento?"
+    [message]="'O valor de ' + ((pendingPaymentRemoval()?.amount_cents ?? 0) | money) + ' volta para o saldo em aberto. Use só para estorno ou lançamento errado.'"
+    confirmLabel="Remover"
+    icon="trash"
+    tone="danger"
+    [busy]="removingPayment()"
+    (confirmed)="confirmPaymentRemoval()"
+    (cancelled)="pendingPaymentRemoval.set(null)"
+  />
 }

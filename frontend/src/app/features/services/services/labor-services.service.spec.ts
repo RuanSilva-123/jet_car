@@ -12,6 +12,8 @@ const service: LaborService = {
   category_label: 'Suspensão',
   description: null,
   is_active: true,
+  reminder_months: 12,
+  reminder_km: 20000,
   created_at: null,
   updated_at: null,
 };
@@ -37,11 +39,18 @@ describe('LaborServicesService', () => {
     req.flush({ data: [], meta: {} });
   });
 
-  it('setActive reenvia os dados sem alterar nome e categoria', () => {
+  it('setActive reenvia os dados sem alterar nome, categoria e intervalo de revisão', () => {
     api.setActive(service, false).subscribe();
     const req = http.expectOne('/api/v1/labor-services/3');
     expect(req.request.method).toBe('PUT');
-    expect(req.request.body).toEqual({ name: 'Troca de amortecedor', category: 'suspension', description: '', is_active: false });
+    expect(req.request.body).toEqual({
+      name: 'Troca de amortecedor',
+      category: 'suspension',
+      description: '',
+      is_active: false,
+      reminder_months: 12,
+      reminder_km: 20000,
+    });
     req.flush({ data: { ...service, is_active: false } });
   });
 

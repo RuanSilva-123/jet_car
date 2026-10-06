@@ -27,7 +27,10 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
       const sessionLost =
         error instanceof HttpErrorResponse && (error.status === 401 || error.status === 419);
 
-      if (sessionLost && !IGNORED_URLS.includes(req.url)) {
+      // Páginas públicas (orçamento por link) não têm sessão para perder
+      const isPublic = req.url.startsWith(`${API_URL}/public/`);
+
+      if (sessionLost && !isPublic && !IGNORED_URLS.includes(req.url)) {
         auth.clearSession();
         router.navigate(['/login'], { queryParams: { returnUrl: router.url } });
       }

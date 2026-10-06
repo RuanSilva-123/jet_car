@@ -5,17 +5,22 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { debounceTime, distinctUntilChanged, finalize, Observable, Subject, switchMap } from 'rxjs';
 
+import { AuthService } from '../../../../core/auth/services/auth.service';
 import { ToastService } from '../../../../core/services/toast.service';
+import { ConfirmDialog } from '../../../../shared/components/confirm-dialog/confirm-dialog';
 import { Combobox, ComboboxOption } from '../../../../shared/components/combobox/combobox';
 import { Icon, IconName } from '../../../../shared/components/icon/icon';
 import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
 import { formatMoney, formatPlate, formatQuantity, maskQuantity, parseQuantity } from '../../../../shared/utils/br-format';
+import { Part } from '../../../parts/models/part';
+import { PartsService } from '../../../parts/services/parts.service';
 import { ServiceFormDialog } from '../../../services/components/service-form-dialog/service-form-dialog';
 import { LaborService } from '../../../services/models/labor-service';
 import { LaborServicesService } from '../../../services/services/labor-services.service';
 import { BudgetDecision, BudgetDecisionDialog } from '../../components/budget-decision-dialog/budget-decision-dialog';
 import { OrderStepper } from '../../components/order-stepper/order-stepper';
+import { PaymentDialog } from '../../components/payment-dialog/payment-dialog';
 import { StatusBadge } from '../../components/status-badge/status-badge';
 import { StatusChange, StatusDialog } from '../../components/status-dialog/status-dialog';
 import {
@@ -26,6 +31,7 @@ import {
   ServiceOrderEvent,
   ServiceOrderItem,
   ServiceOrderPart,
+  ServiceOrderPayment,
   ServiceOrderStatus,
 } from '../../models/service-order';
 import { ServiceOrdersService } from '../../services/service-orders.service';
@@ -45,18 +51,39 @@ const EVENT_ICONS: Record<ServiceOrderEvent['type'], IconName> = {
   budget_sent: 'arrow-right',
   budget_approved: 'check',
   budget_rejected: 'close',
+  item_assigned: 'user',
+  payment_added: 'wallet',
+  payment_removed: 'trash',
+  inspection: 'camera',
+  inspection_signed: 'signature',
 };
 
 @Component({
   selector: 'app-order-detail',
-  imports: [RouterLink, DatePipe, Icon, Combobox, BrFormatPipe, MoneyPipe, StatusBadge, StatusDialog, BudgetDecisionDialog, ServiceFormDialog, OrderStepper],
+  imports: [
+    RouterLink,
+    DatePipe,
+    Icon,
+    Combobox,
+    BrFormatPipe,
+    MoneyPipe,
+    StatusBadge,
+    StatusDialog,
+    BudgetDecisionDialog,
+    ServiceFormDialog,
+    OrderStepper,
+    PaymentDialog,
+    ConfirmDialog,
+  ],
   templateUrl: './order-detail.html',
-  styleUrl: './order-detail.scss',
+  styleUrls: ['./order-detail.scss', './order-detail-extras.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
 export class OrderDetail implements OnInit {
   private readonly orders = inject(ServiceOrdersService);
   private readonly laborServices = inject(LaborServicesService);
+  private readonly partsCatalog = inject(PartsService);
+  private readonly auth = inject(AuthService);
   private readonly toast = inject(ToastService);
   private readonly router = inject(Router);
   private readonly destroyRef = inject(DestroyRef);
@@ -88,6 +115,24 @@ export class OrderDetail implements OnInit {
   protected readonly partQuantity = signal('1');
   protected readonly addingPart = signal(false);
   protected readonly partError = signal<string | null>(null);
+
+  // Peça do estoque escolhida para adicionar (null = peça avulsa digitada)
+  protected readonly stockOptions = signal<ComboboxOption[]>([]);
+  protected readonly stockParts = signal<Part[]>([]);
+  protected readonly searchingStock = signal(false);
+  protected readonly stockPart = signal<Part | null>(null);
+
+  // Responsável por serviço
+  protected readonly mechanics = signal<{ id: number; name: string }[]>([]);
+  protected readonly assigning = signal<number | null>(null);
+
+  // Financeiro
+  protected readonly canManageFinance = this.auth.canManageFinance;
+  protected readonly canRemovePayment = this.auth.isMaster;
+  protected readonly paymentOpen = signal(false);
+  protected readonly pendingPaymentRemoval = signal<ServiceOrderPayment | null>(null);
+  protected readonly removingPayment = signal(false);
+  protected readonly linkCopied = signal(false);
 
   protected readonly eventIcons = EVENT_ICONS;
 
@@ -141,6 +186,7 @@ export class OrderDetail implements OnInit {
   });
 
   protected readonly budgetPdf = computed(() => this.pdf('budget'));
+  protected readonly inspectionPdf = computed(() => this.pdf('inspection'));
   protected readonly reportPdf = computed(() => this.pdf('report'));
 
   /** Comprovante faz mais sentido com o serviço concluído/entregue. */
@@ -161,15 +207,40 @@ export class OrderDetail implements OnInit {
       ...(order.discount_cents > 0 ? [`Desconto: −${formatMoney(order.discount_cents)}`] : []),
       `*Total: ${formatMoney(order.total_cents)}*`,
       '',
-      'Envio o PDF com os detalhes. Podemos seguir com o serviço?',
+      ...(order.public_budget_url
+        ? ['Veja os detalhes e aprove ou recuse por este link:', order.public_budget_url]
+        : ['Envio o PDF com os detalhes. Podemos seguir com o serviço?']),
     ];
 
     return `https://wa.me/55${order.customer.phone}?text=${encodeURIComponent(lines.join('\n'))}`;
   });
 
   private readonly serviceSearch$ = new Subject<string>();
+  private readonly stockSearch$ = new Subject<string>();
 
   ngOnInit(): void {
+    this.stockSearch$
+      .pipe(
+        debounceTime(200),
+        distinctUntilChanged(),
+        switchMap((search) => {
+          this.searchingStock.set(true);
+          return this.partsCatalog.list({ search, status: 'active', page: 1, perPage: 30 }).pipe(finalize(() => this.searchingStock.set(false)));
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe((result) => {
+        this.stockParts.set(result.data);
+        this.stockOptions.set(
+          result.data.map((part) => ({
+            code: String(part.id),
+            name: `${part.name}${part.part_number ? ` (${part.part_number})` : ''} · ${formatQuantity(part.stock_quantity)} ${part.unit} em estoque`,
+          })),
+        );
+      });
+
+    this.orders.mechanics().subscribe({ next: (list) => this.mechanics.set(list), error: () => this.mechanics.set([]) });
+
     this.serviceSearch$
       .pipe(
         debounceTime(200),
@@ -255,6 +326,28 @@ export class OrderDetail implements OnInit {
     this.partQuantity.set(input.value);
   }
 
+  protected onStockQuery(search: string): void {
+    this.stockSearch$.next(search.trim());
+  }
+
+  /** Peça do estoque: preenche nome e código; ao adicionar, sai do estoque. */
+  protected selectStockPart(option: ComboboxOption): void {
+    const part = this.stockParts().find((item) => String(item.id) === option.code) ?? null;
+    this.stockPart.set(part);
+    if (part) {
+      this.partName.set(part.name);
+      this.partNumber.set(part.part_number ?? '');
+      this.partError.set(null);
+      setTimeout(() => document.querySelector<HTMLInputElement>('.part-form__qty')?.select());
+    }
+  }
+
+  protected clearStockPart(): void {
+    this.stockPart.set(null);
+    this.partName.set('');
+    this.partNumber.set('');
+  }
+
   protected addPart(): void {
     const order = this.order();
     const name = this.partName().trim();
@@ -273,11 +366,12 @@ export class OrderDetail implements OnInit {
     this.partError.set(null);
     this.addingPart.set(true);
     this.orders
-      .addPart(order.id, { name, part_number: this.partNumber().trim(), quantity })
+      .addPart(order.id, { part_id: this.stockPart()?.id ?? null, name, part_number: this.partNumber().trim(), quantity })
       .pipe(finalize(() => this.addingPart.set(false)))
       .subscribe({
         next: (updated) => {
           this.order.set(updated);
+          this.stockPart.set(null);
           this.partName.set('');
           this.partNumber.set('');
           this.partQuantity.set('1');
@@ -386,6 +480,63 @@ export class OrderDetail implements OnInit {
       });
   }
 
+  // --- responsável, pagamentos e link ----------------------------------------------
+
+  protected assignMechanic(item: ServiceOrderItem, value: string): void {
+    const order = this.order();
+    if (!order) return;
+
+    this.assigning.set(item.id);
+    this.orders
+      .assignMechanic(order.id, item.id, value ? Number(value) : null)
+      .pipe(finalize(() => this.assigning.set(null)))
+      .subscribe({
+        next: (updated) => this.order.set(updated),
+        error: (error: unknown) => this.toast.error(this.describeError(error)),
+      });
+  }
+
+  protected onPaymentSaved(updated: ServiceOrder): void {
+    this.order.set(updated);
+    this.paymentOpen.set(false);
+    this.toast.success(updated.balance_cents > 0 ? 'Pagamento registrado.' : 'Pagamento registrado. OS quitada.');
+  }
+
+  protected confirmPaymentRemoval(): void {
+    const order = this.order();
+    const payment = this.pendingPaymentRemoval();
+    if (!order || !payment) return;
+
+    this.removingPayment.set(true);
+    this.orders
+      .removePayment(order.id, payment.id)
+      .pipe(finalize(() => this.removingPayment.set(false)))
+      .subscribe({
+        next: (updated) => {
+          this.order.set(updated);
+          this.pendingPaymentRemoval.set(null);
+          this.toast.success('Pagamento removido.');
+        },
+        error: (error: unknown) => {
+          this.pendingPaymentRemoval.set(null);
+          this.toast.error(this.describeError(error));
+        },
+      });
+  }
+
+  protected copyBudgetLink(): void {
+    const url = this.order()?.public_budget_url;
+    if (!url) return;
+    navigator.clipboard?.writeText(url).then(
+      () => {
+        this.linkCopied.set(true);
+        this.toast.success('Link do orçamento copiado.');
+        setTimeout(() => this.linkCopied.set(false), 2000);
+      },
+      () => this.toast.error('Não foi possível copiar. Selecione o link e copie manualmente.'),
+    );
+  }
+
   protected addNote(): void {
     const order = this.order();
     const text = this.note().trim();
@@ -408,7 +559,7 @@ export class OrderDetail implements OnInit {
     return `https://wa.me/55${phone}`;
   }
 
-  private pdf(document: 'budget' | 'report'): { view: string; download: string } | null {
+  private pdf(document: 'budget' | 'report' | 'inspection'): { view: string; download: string } | null {
     const order = this.order();
     return order
       ? { view: this.orders.pdfUrl(order.id, document), download: this.orders.pdfUrl(order.id, document, true) }

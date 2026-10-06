@@ -1,0 +1,94 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="appointment-dialog-title">
+  <form (submit)="$event.preventDefault(); submit()" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="calendar" [size]="20" /></span>
+      <div>
+        <h2 id="appointment-dialog-title">{{ isEdit() ? 'Editar agendamento' : 'Novo agendamento' }}</h2>
+        <p>Quando o carro chegar, o agendamento vira OS.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      <div class="field">
+        <label for="appointment-customer">Cliente</label>
+        <app-combobox
+          inputId="appointment-customer"
+          [remote]="true"
+          [options]="customerOptions()"
+          [value]="customer() ? '' + customer()!.id : null"
+          [fallbackLabel]="customer()?.trade_name || customer()?.name || null"
+          [loading]="searching()"
+          placeholder="Buscar por nome, telefone ou placa"
+          emptyText="Nenhum cliente encontrado"
+          (queryChange)="onQuery($event)"
+          (selected)="selectCustomer($event)"
+        />
+      </div>
+
+      @if (customer()) {
+        <div class="field">
+          <label for="appointment-vehicle">Veículo</label>
+          <div class="field__control">
+            <select id="appointment-vehicle" [value]="vehicleId() ?? ''" (change)="vehicleId.set($any($event.target).value ? +$any($event.target).value : null)">
+              <option value="">Definir na chegada</option>
+              @for (vehicle of vehicles(); track vehicle.id) {
+                <option [value]="vehicle.id" [selected]="vehicle.id === vehicleId()">{{ vehicle.brand }} {{ vehicle.model }}{{ vehicle.plate ? ' · ' + vehicle.plate : '' }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      }
+
+      <div class="dialog__grid">
+        <div class="field">
+          <label for="appointment-date">Data</label>
+          <div class="field__control">
+            <input id="appointment-date" type="date" [value]="date()" (change)="date.set($any($event.target).value)" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="appointment-time">Horário</label>
+          <div class="field__control">
+            <input id="appointment-time" type="time" step="900" [value]="time()" (change)="time.set($any($event.target).value)" />
+          </div>
+        </div>
+        <div class="field">
+          <label for="appointment-duration">Duração</label>
+          <div class="field__control">
+            <select id="appointment-duration" [value]="duration()" (change)="duration.set(+$any($event.target).value)">
+              @for (minutes of durations; track minutes) {
+                <option [value]="minutes" [selected]="minutes === duration()">{{ minutes < 60 ? minutes + ' min' : minutes / 60 + (minutes === 60 ? ' hora' : ' horas') }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="appointment-notes">Motivo / serviços <span class="optional">(vira o relato da OS)</span></label>
+        <div class="field__control field__control--textarea">
+          <textarea id="appointment-notes" rows="3" [value]="notes()" (input)="notes.set($any($event.target).value)" maxlength="2000" placeholder="Ex.: revisão dos 50 mil km, barulho na suspensão"></textarea>
+        </div>
+      </div>
+
+      @if (error(); as message) {
+        <p class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        {{ isEdit() ? 'Salvar' : 'Agendar' }}
+      </button>
+    </footer>
+  </form>
+</dialog>

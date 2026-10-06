@@ -4,6 +4,7 @@ import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { Router, RouterLink } from '@angular/router';
 import { catchError, debounceTime, distinctUntilChanged, map, of, switchMap, tap } from 'rxjs';
 
+import { AuthService } from '../../../../core/auth/services/auth.service';
 import { Paginated } from '../../../../core/http/api';
 import { Icon } from '../../../../shared/components/icon/icon';
 import { Pagination } from '../../../../shared/components/pagination/pagination';
@@ -40,6 +41,9 @@ export class OrderList {
   protected readonly search = signal('');
   protected readonly status = signal<ServiceOrderStatusFilter>('active');
   protected readonly page = signal(1);
+  /** Mecânico vê por padrão só as OS com serviços atribuídos a ele. */
+  protected readonly isMechanic = inject(AuthService).isMechanic;
+  protected readonly onlyMine = signal(this.isMechanic());
   private readonly reloadTick = signal(0);
 
   protected readonly result = signal<Paginated<ServiceOrder> | null>(null);
@@ -53,6 +57,7 @@ export class OrderList {
     status: this.status(),
     page: this.page(),
     perPage: PER_PAGE,
+    mechanicId: this.onlyMine() ? ('me' as const) : undefined,
     tick: this.reloadTick(),
   }));
 

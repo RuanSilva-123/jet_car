@@ -4,7 +4,7 @@ import { map, Observable } from 'rxjs';
 
 import { API_URL, ApiResource, Paginated } from '../../../core/http/api';
 import { Customer, Vehicle } from '../../customers/models/customer';
-import { ServiceOrder, ServiceOrderPayload, ServiceOrderStatus } from '../models/service-order';
+import { PaymentMethod, ServiceOrder, ServiceOrderPayload, ServiceOrderStatus } from '../models/service-order';
 
 export type ServiceOrderStatusFilter = 'active' | 'all' | ServiceOrderStatus;
 
@@ -14,12 +14,24 @@ export interface ServiceOrderQuery {
   page: number;
   perPage: number;
   vehicleId?: number;
+  /** "me" = serviços atribuídos ao usuário logado. */
+  mechanicId?: number | 'me';
 }
 
 export interface NewPart {
+  /** Do estoque: nome/código/preço vêm do catálogo e a quantidade sai do estoque. */
+  part_id?: number | null;
   name: string;
   part_number: string;
   quantity: number;
+}
+
+export interface NewPayment {
+  method: PaymentMethod;
+  amount_cents: number;
+  installments: number;
+  paid_at: string;
+  notes: string;
 }
 
 export interface VehicleHistory {
@@ -39,6 +51,7 @@ export class ServiceOrdersService {
     if (query.search) params = params.set('search', query.search);
     if (query.status !== 'all') params = params.set('status', query.status);
     if (query.vehicleId) params = params.set('vehicle_id', query.vehicleId);
+    if (query.mechanicId) params = params.set('mechanic_id', query.mechanicId);
 
     return this.http.get<Paginated<ServiceOrder>>(this.url, { params });
   }
@@ -104,11 +117,31 @@ export class ServiceOrdersService {
       .pipe(map(({ data }) => data));
   }
 
+  /** Mecânico responsável pelo serviço (null = sem responsável). */
+  assignMechanic(id: number, itemId: number, mechanicId: number | null): Observable<ServiceOrder> {
+    return this.http
+      .put<ApiResource<ServiceOrder>>(`${this.url}/${id}/items/${itemId}/mechanic`, { mechanic_id: mechanicId })
+      .pipe(map(({ data }) => data));
+  }
+
+  /** Mecânicos ativos (opções de responsável). */
+  mechanics(): Observable<{ id: number; name: string }[]> {
+    return this.http.get<ApiResource<{ id: number; name: string }[]>>(`${API_URL}/mechanics`).pipe(map(({ data }) => data));
+  }
+
+  addPayment(id: number, payment: NewPayment): Observable<ServiceOrder> {
+    return this.http.post<ApiResource<ServiceOrder>>(`${this.url}/${id}/payments`, payment).pipe(map(({ data }) => data));
+  }
+
+  removePayment(id: number, paymentId: number): Observable<ServiceOrder> {
+    return this.http.delete<ApiResource<ServiceOrder>>(`${this.url}/${id}/payments/${paymentId}`).pipe(map(({ data }) => data));
+  }
+
   /**
    * Endereço do PDF (mesmo domínio: o cookie de sessão autentica a abertura em nova aba).
    * budget = orçamento para o cliente; report = comprovante do serviço realizado.
    */
-  pdfUrl(id: number, document: 'budget' | 'report', download = false): string {
+  pdfUrl(id: number, document: 'budget' | 'report' | 'inspection', download = false): string {
     return `${this.url}/${id}/pdf/${document}${download ? '?download=1' : ''}`;
   }
 

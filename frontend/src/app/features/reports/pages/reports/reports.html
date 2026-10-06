@@ -1,0 +1,133 @@
+<section class="page-header">
+  <div>
+    <h1>Relatórios</h1>
+    <p>{{ tab().description }}</p>
+  </div>
+  <a class="btn btn--ghost" [href]="csvUrl()" download>
+    <app-icon name="download" [size]="16" /> Exportar CSV
+  </a>
+</section>
+
+<nav class="report-tabs" aria-label="Relatórios">
+  @for (item of tabs; track item.key) {
+    <button type="button" class="report-tab" [class.is-active]="report() === item.key" [attr.aria-current]="report() === item.key ? 'page' : null" (click)="selectReport(item.key)">
+      <app-icon [name]="item.icon" [size]="16" />
+      {{ item.label }}
+    </button>
+  }
+</nav>
+
+<article class="card list">
+  <div class="toolbar">
+    <div class="range">
+      <label>
+        <span class="sr-only">De</span>
+        <input type="date" [value]="from()" (change)="from.set($any($event.target).value)" />
+      </label>
+      <span class="muted">até</span>
+      <label>
+        <span class="sr-only">Até</span>
+        <input type="date" [value]="to()" (change)="to.set($any($event.target).value)" />
+      </label>
+      <div class="presets">
+        <button type="button" class="link-button" (click)="setPreset('month')">Este mês</button>
+        <button type="button" class="link-button" (click)="setPreset('last-month')">Mês passado</button>
+        <button type="button" class="link-button" (click)="setPreset('year')">Este ano</button>
+      </div>
+    </div>
+
+    @if (report() === 'revenue') {
+      <div class="segmented" role="group" aria-label="Agrupar por">
+        <button type="button" [class.is-active]="group() === 'day'" (click)="group.set('day')">Por dia</button>
+        <button type="button" [class.is-active]="group() === 'month'" (click)="group.set('month')">Por mês</button>
+      </div>
+    } @else if (report() === 'customers') {
+      <label class="checkbox">
+        <input type="checkbox" [checked]="onlyReturning()" (change)="onlyReturning.set($any($event.target).checked)" />
+        Só quem voltou
+      </label>
+    }
+  </div>
+
+  @if (result(); as data) {
+    <!-- Resumo -->
+    <div class="summary">
+      @switch (data.report) {
+        @case ('revenue') {
+          <div class="kpi"><span>Faturamento</span><strong>{{ data.summary['total_cents'] | money }}</strong></div>
+          <div class="kpi"><span>OS entregues</span><strong>{{ data.summary['orders'] | number }}</strong></div>
+          <div class="kpi"><span>Ticket médio</span><strong>{{ data.summary['average_cents'] | money }}</strong></div>
+          <div class="kpi"><span>Recebido</span><strong>{{ total('received_cents') | money }}</strong></div>
+        }
+        @case ('services') {
+          <div class="kpi"><span>Serviços diferentes</span><strong>{{ data.summary['services'] | number }}</strong></div>
+          <div class="kpi"><span>Execuções</span><strong>{{ data.summary['executions'] | number }}</strong></div>
+        }
+        @case ('customers') {
+          <div class="kpi"><span>Clientes atendidos</span><strong>{{ data.summary['customers'] | number }}</strong></div>
+          <div class="kpi"><span>Voltaram</span><strong>{{ data.summary['returning'] | number }}</strong></div>
+          <div class="kpi"><span>Taxa de retorno</span><strong>{{ data.summary['returning_rate'] | number: '1.0-1' }}%</strong></div>
+        }
+        @case ('mechanics') {
+          <div class="kpi"><span>Mecânicos com produção</span><strong>{{ data.summary['mechanics'] | number }}</strong></div>
+          <div class="kpi"><span>Serviços feitos</span><strong>{{ total('services') | number }}</strong></div>
+        }
+      }
+    </div>
+
+    @if (data.report === 'revenue' && chart().length > 1) {
+      <div class="chart">
+        <h2>Faturamento {{ group() === 'month' ? 'por mês' : 'por dia' }}</h2>
+        <app-bar-chart [data]="chart()" [formatTick]="moneyTick" ariaLabel="Faturamento por período" />
+      </div>
+    }
+
+    <div class="list__body" [class.is-loading]="loading()">
+      @if (data.rows.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon name="bar-chart" /></span>
+          <strong>Sem dados no período</strong>
+          <p>Escolha outro período. O faturamento conta as OS entregues.</p>
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                @for (column of data.columns; track column.key) {
+                  <th [class.right]="isNumeric(column.type)">{{ column.label }}</th>
+                }
+              </tr>
+            </thead>
+            <tbody>
+              @for (row of data.rows; track $index) {
+                <tr>
+                  @for (column of data.columns; track column.key) {
+                    <td [class.right]="isNumeric(column.type)" [class.first]="$first">{{ cell(row[column.key], column.type) }}</td>
+                  }
+                </tr>
+              }
+            </tbody>
+            @if (data.totals; as totals) {
+              <tfoot>
+                <tr>
+                  @for (column of data.columns; track column.key) {
+                    <td [class.right]="isNumeric(column.type)">{{ $first ? 'Total' : cell(totals[column.key], column.type) }}</td>
+                  }
+                </tr>
+              </tfoot>
+            }
+          </table>
+        </div>
+      }
+    </div>
+  } @else if (loading()) {
+    <div class="list__state"><span class="spinner spinner--dark"></span></div>
+  } @else if (failed()) {
+    <div class="empty-state">
+      <span class="empty-state__icon"><app-icon name="alert" /></span>
+      <strong>Não foi possível gerar o relatório</strong>
+      <p>Confira o período (a data inicial vem antes da final).</p>
+    </div>
+  }
+</article>
