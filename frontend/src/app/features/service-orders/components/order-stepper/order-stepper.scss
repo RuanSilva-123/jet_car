@@ -1,0 +1,90 @@
+// Etapas da OS: entrada → diagnóstico → orçamento → aprovação → execução → entrega
+:host {
+  display: block;
+}
+
+.stepper {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  margin: 0;
+  padding: 14px 18px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg, 14px);
+  background: var(--color-surface);
+  list-style: none;
+
+  &__step {
+    position: relative;
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    color: var(--color-text-muted);
+    font-size: 12px;
+    font-weight: 500;
+    text-align: center;
+
+    // Linha ligando as etapas
+    &:not(:first-child)::before {
+      position: absolute;
+      top: 13px;
+      right: calc(50% + 18px);
+      left: calc(-50% + 18px);
+      height: 2px;
+      border-radius: 2px;
+      background: var(--color-border);
+      content: '';
+    }
+
+    &.is-done::before,
+    &.is-current::before {
+      background: var(--color-success) !important;
+    }
+
+    &.is-done {
+      color: var(--color-text);
+    }
+
+    &.is-current {
+      color: var(--color-text);
+      font-weight: 700;
+    }
+  }
+
+  &__dot {
+    display: grid;
+    place-items: center;
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--color-border);
+    border-radius: 50%;
+    background: var(--color-surface);
+    font-size: 12px;
+    font-weight: 700;
+
+    .is-done & {
+      border-color: var(--color-success);
+      background: var(--color-success);
+      color: #fff;
+    }
+
+    .is-current & {
+      border-color: var(--color-brand);
+      background: var(--color-brand);
+      color: #fff;
+      box-shadow: 0 0 0 4px var(--color-focus-ring);
+    }
+  }
+
+  @media (max-width: 640px) {
+    padding: 12px 8px;
+
+    &__label {
+      font-size: 10.5px;
+    }
+
+    &__step:not(:first-child)::before {
+      right: calc(50% + 15px);
+      left: calc(-50% + 15px);
+    }
+  }
+}

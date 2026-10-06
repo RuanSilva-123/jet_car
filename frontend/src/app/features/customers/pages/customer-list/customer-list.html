@@ -1,0 +1,182 @@
+<section class="page-header">
+  <div>
+    <h1>Clientes</h1>
+    <p>Clientes da oficina e os veículos de cada um.</p>
+  </div>
+  <a routerLink="new" class="btn btn--primary">
+    <app-icon name="plus" />
+    Novo cliente
+  </a>
+</section>
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar clientes</span>
+      <input
+        type="search"
+        placeholder="Buscar por nome, CPF/CNPJ, telefone ou placa"
+        [value]="search()"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </label>
+
+    <div class="segmented" role="group" aria-label="Filtrar por tipo de cliente">
+      @for (filter of typeFilters; track filter.value) {
+        <button
+          type="button"
+          [class.is-active]="personType() === filter.value"
+          [attr.aria-pressed]="personType() === filter.value"
+          (click)="onPersonType(filter.value)"
+        >
+          {{ filter.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (loadError()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar os clientes</strong>
+        <p>Verifique sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="reload()">Tentar novamente</button>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon [name]="hasFilters() ? 'search' : 'contact'" /></span>
+          @if (hasFilters()) {
+            <strong>Nenhum cliente encontrado</strong>
+            <p>Tente buscar por outro nome, documento, telefone ou placa.</p>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="clearFilters()">Limpar filtros</button>
+          } @else {
+            <strong>Nenhum cliente cadastrado</strong>
+            <p>Cadastre o primeiro cliente e os veículos dele.</p>
+            <a routerLink="new" class="btn btn--primary btn--sm"><app-icon name="plus" [size]="16" /> Novo cliente</a>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Contato</th>
+                <th>Veículos</th>
+                <th>Cidade</th>
+                <th class="data-table__actions"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (customer of page.data; track customer.id) {
+                <tr class="is-clickable" (click)="open(customer)">
+                  <td>
+                    <div class="identity">
+                      <span class="avatar" [class.avatar--company]="customer.person_type === 'company'">
+                        @if (customer.person_type === 'company') {
+                          <app-icon name="building" [size]="16" />
+                        } @else {
+                          {{ initials(customer.name) }}
+                        }
+                      </span>
+                      <span class="identity__text">
+                        <strong>{{ customer.trade_name || customer.name }}</strong>
+                        <small>
+                          @if (customer.document) {
+                            {{ customer.person_type === 'company' ? 'CNPJ' : 'CPF' }} {{ customer.document | brFormat: 'document' }}
+                          } @else {
+                            {{ customer.person_type_label }}
+                          }
+                        </small>
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="contact">
+                      <span class="contact__phone">
+                        {{ customer.phone | brFormat: 'phone' }}
+                        @if (customer.phone_is_whatsapp) {
+                          <a
+                            class="whatsapp"
+                            [href]="whatsappLink(customer.phone)"
+                            target="_blank"
+                            rel="noopener"
+                            title="Abrir conversa no WhatsApp"
+                            aria-label="Abrir conversa no WhatsApp"
+                            (click)="$event.stopPropagation()"
+                          >
+                            <app-icon name="whatsapp" [size]="14" />
+                          </a>
+                        }
+                      </span>
+                      @if (customer.email) {
+                        <small>{{ customer.email }}</small>
+                      }
+                    </div>
+                  </td>
+                  <td>
+                    @if (customer.vehicles?.length) {
+                      <div class="plates">
+                        @for (vehicle of customer.vehicles!.slice(0, visiblePlates); track vehicle.id) {
+                          <span class="plate-chip" [title]="vehicle.brand + ' ' + vehicle.model">
+                            <span class="plate">{{ vehicle.plate ? (vehicle.plate | brFormat: 'plate') : 'S/ placa' }}</span>
+                            <span class="plate-chip__model">{{ vehicle.model }}</span>
+                          </span>
+                        }
+                        @if (customer.vehicles!.length > visiblePlates) {
+                          <span class="badge">+{{ customer.vehicles!.length - visiblePlates }}</span>
+                        }
+                      </div>
+                    } @else {
+                      <span class="muted">Nenhum</span>
+                    }
+                  </td>
+                  <td class="muted">
+                    {{ customer.city ? customer.city + (customer.state ? ' / ' + customer.state : '') : '—' }}
+                  </td>
+                  <td class="data-table__actions" (click)="$event.stopPropagation()">
+                    <div class="actions">
+                      <a class="btn btn--icon" [routerLink]="[customer.id, 'edit']" title="Editar" [attr.aria-label]="'Editar ' + customer.name">
+                        <app-icon name="pencil" [size]="16" />
+                      </a>
+                      @if (canDelete()) {
+                        <button
+                          type="button"
+                          class="btn btn--icon is-danger"
+                          title="Excluir"
+                          [attr.aria-label]="'Excluir ' + customer.name"
+                          (click)="pendingDelete.set(customer)"
+                        >
+                          <app-icon name="trash" [size]="16" />
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir cliente?"
+  [message]="'O cadastro de ' + (pendingDelete()?.name ?? '') + ' e os veículos dele serão removidos da listagem.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>

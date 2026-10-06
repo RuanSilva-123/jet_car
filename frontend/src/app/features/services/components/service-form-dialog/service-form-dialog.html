@@ -1,0 +1,85 @@
+<dialog #dialog (cancel)="onCancel($event)" aria-labelledby="service-dialog-title">
+  <form [formGroup]="form" (ngSubmit)="submit(false)" novalidate>
+    <header class="dialog__header">
+      <span class="dialog__icon"><app-icon name="wrench" [size]="20" /></span>
+      <div>
+        <h2 id="service-dialog-title">{{ isEdit() ? 'Editar serviço' : 'Novo serviço' }}</h2>
+        <p>Mão de obra que a oficina realiza.</p>
+      </div>
+      <button type="button" class="btn btn--icon" (click)="closed.emit()" aria-label="Fechar" [disabled]="saving()">
+        <app-icon name="close" [size]="18" />
+      </button>
+    </header>
+
+    <div class="dialog__body">
+      @if (formError(); as message) {
+        <p class="dialog__alert" role="alert"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+
+      <div class="field" [class.field--invalid]="errorFor('name')">
+        <label for="service-name">Nome do serviço</label>
+        <div class="field__control">
+          <input #nameInput id="service-name" formControlName="name" placeholder="Ex.: Troca de amortecedor" autocomplete="off" />
+        </div>
+        @if (errorFor('name'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="field" [class.field--invalid]="errorFor('category')">
+        <label for="service-category">Categoria</label>
+        <div class="field__control">
+          <select id="service-category" formControlName="category">
+            @for (category of categories; track category.value) {
+              <option [value]="category.value">{{ category.label }}</option>
+            }
+          </select>
+        </div>
+        @if (errorFor('category'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="field" [class.field--invalid]="errorFor('description')">
+        <label for="service-description">Descrição <span class="optional">(opcional)</span></label>
+        <div class="field__control field__control--textarea">
+          <textarea
+            id="service-description"
+            formControlName="description"
+            rows="3"
+            placeholder="Detalhes que ajudam a equipe, ex.: dianteiro ou traseiro, inclui alinhamento"
+          ></textarea>
+        </div>
+        @if (errorFor('description'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <label class="switch">
+        <input type="checkbox" formControlName="is_active" />
+        <span class="switch__track"></span>
+        <span class="switch__text">
+          <strong>{{ form.controls.is_active.value ? 'Serviço ativo' : 'Serviço inativo' }}</strong>
+          <small>{{ form.controls.is_active.value ? 'Aparece para a equipe usar.' : 'Fica oculto, mas o histórico é mantido.' }}</small>
+        </span>
+      </label>
+    </div>
+
+    <footer class="dialog__footer">
+      <button type="button" class="btn btn--ghost" (click)="closed.emit()" [disabled]="saving()">Cancelar</button>
+      @if (!isEdit()) {
+        <button type="button" class="btn btn--ghost" (click)="submit(true)" [disabled]="saving()">
+          Salvar e adicionar outro
+        </button>
+      }
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span>
+        } @else {
+          <app-icon name="check" [size]="16" />
+        }
+        Salvar
+      </button>
+    </footer>
+  </form>
+</dialog>

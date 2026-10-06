@@ -1,0 +1,46 @@
+<div class="auth">
+  <aside class="brand">
+    <div class="brand__grid" aria-hidden="true"></div>
+    <app-logo class="brand__watermark" variant="mark" aria-hidden="true" />
+
+    <header class="brand__row">
+      <app-logo class="brand__logo" />
+    </header>
+
+    <div class="brand__body">
+      <span class="tag tag--dark">Painel administrativo</span>
+      <h1>Sua oficina,<br />sob controle<span class="brand__accent">.</span></h1>
+      <p class="brand__lead">Gestão da oficina em um só lugar, com acesso restrito à equipe que você autorizar.</p>
+
+      <ul class="features">
+        @for (feature of features; track feature.title) {
+          <li>
+            <span class="features__icon"><app-icon [name]="feature.icon" /></span>
+            <span class="features__text">
+              <strong>{{ feature.title }}</strong>
+              <span>{{ feature.text }}</span>
+            </span>
+          </li>
+        }
+      </ul>
+    </div>
+
+    <footer class="brand__row brand__footer">© {{ year }} JetCar Mecânica Automotiva</footer>
+  </aside>
+
+  <section class="panel">
+    <header class="panel__row">
+      <app-logo class="panel__logo" />
+      <span class="tag"><app-icon name="lock" [size]="12" /> Área restrita</span>
+    </header>
+
+    <main class="panel__body">
+      <router-outlet />
+    </main>
+
+    <footer class="panel__row panel__footer">
+      <app-icon name="shield" [size]="14" />
+      Conexão segura e sessão criptografada
+    </footer>
+  </section>
+</div>

@@ -1,0 +1,188 @@
+<section class="page-header">
+  <div>
+    <a routerLink="/users" class="back-link"><app-icon name="arrow-left" [size]="14" /> Usuários</a>
+    <h1>{{ isEdit() ? 'Editar usuário' : 'Novo usuário' }}</h1>
+    <p>
+      {{ isEdit() ? 'Atualize os dados e o acesso desta pessoa ao painel.' : 'Cadastre uma pessoa para acessar o painel.' }}
+    </p>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else {
+  <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (formError(); as message) {
+      <div class="form-alert" role="alert">
+        <app-icon name="alert" />
+        <span>{{ message }}</span>
+      </div>
+    }
+
+    <!-- Dados pessoais -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Dados pessoais</h2>
+        <p>Nome e e-mail usados para identificar e acessar a conta.</p>
+      </header>
+
+      <div class="form-section__fields form-grid">
+        <div class="field" [class.field--invalid]="errorFor('name')">
+          <label for="name">Nome completo</label>
+          <div class="field__control">
+            <input id="name" formControlName="name" autocomplete="off" placeholder="Ex.: João da Silva" />
+          </div>
+          @if (errorFor('name'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+
+        <div class="field" [class.field--invalid]="errorFor('email')">
+          <label for="email">E-mail de acesso</label>
+          <div class="field__control">
+            <app-icon name="mail" />
+            <input id="email" type="email" formControlName="email" autocomplete="off" placeholder="nome@jetcar.com.br" />
+          </div>
+          @if (errorFor('email'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Acesso -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Acesso</h2>
+        <p>Defina o que a pessoa pode fazer e se ela pode entrar no painel.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="field">
+          <span class="field__label">Perfil</span>
+          <div class="choices" role="radiogroup" aria-label="Perfil">
+            @for (option of roleOptions; track option.value) {
+              <label class="choice">
+                <input type="radio" formControlName="role" [value]="option.value" />
+                <span class="choice__text">
+                  <strong>{{ option.label }}</strong>
+                  <small>{{ option.description }}</small>
+                </span>
+              </label>
+            }
+          </div>
+          @if (errorFor('role'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+
+        <div class="field">
+          <span class="field__label">Status</span>
+          <label class="switch">
+            <input type="checkbox" formControlName="is_active" />
+            <span class="switch__track"></span>
+            <span class="switch__text">
+              <strong>{{ form.controls.is_active.value ? 'Conta ativa' : 'Conta desativada' }}</strong>
+              <small>
+                {{ form.controls.is_active.value ? 'Pode entrar no painel.' : 'Não consegue entrar no painel.' }}
+              </small>
+            </span>
+          </label>
+          @if (errorFor('is_active'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+
+        @if (isSelf()) {
+          <p class="note">
+            <app-icon name="shield" [size]="16" />
+            Você não pode alterar o perfil nem desativar a sua própria conta.
+          </p>
+        }
+      </div>
+    </section>
+
+    <!-- Senha -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Senha</h2>
+        <p>
+          @if (isEdit()) {
+            Preencha apenas se quiser definir uma nova senha. Em branco, a senha atual é mantida.
+          } @else {
+            Mínimo de 8 caracteres, com letras e números. Repasse a senha à pessoa de forma segura.
+          }
+        </p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="form-grid">
+          <div class="field" [class.field--invalid]="errorFor('password')">
+            <label for="password">{{ isEdit() ? 'Nova senha' : 'Senha' }}</label>
+            <div class="field__control">
+              <app-icon name="lock" />
+              <input
+                id="password"
+                [type]="showPassword() ? 'text' : 'password'"
+                formControlName="password"
+                autocomplete="new-password"
+                placeholder="Mínimo 8 caracteres"
+              />
+              <button
+                type="button"
+                class="field__action"
+                (click)="showPassword.set(!showPassword())"
+                [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+              >
+                <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" />
+              </button>
+            </div>
+            @if (errorFor('password'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+
+          <div class="field" [class.field--invalid]="confirmationError()">
+            <label for="password_confirmation">Confirmar senha</label>
+            <div class="field__control">
+              <app-icon name="lock" />
+              <input
+                id="password_confirmation"
+                [type]="showPassword() ? 'text' : 'password'"
+                formControlName="password_confirmation"
+                autocomplete="new-password"
+                placeholder="Repita a senha"
+              />
+            </div>
+            @if (confirmationError(); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+        </div>
+
+        <div class="password-tools">
+          <button type="button" class="btn btn--ghost btn--sm" (click)="generate()">
+            <app-icon name="key" [size]="16" /> Gerar senha forte
+          </button>
+          @if (form.controls.password.value) {
+            <button type="button" class="btn btn--ghost btn--sm" (click)="copyPassword()">
+              <app-icon name="copy" [size]="16" /> Copiar senha
+            </button>
+          }
+        </div>
+      </div>
+    </section>
+
+    <footer class="form-footer">
+      <a routerLink="/users" class="btn btn--ghost">Cancelar</a>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span> Salvando...
+        } @else {
+          <app-icon name="check" [size]="16" />
+          {{ isEdit() ? 'Salvar alterações' : 'Cadastrar usuário' }}
+        }
+      </button>
+    </footer>
+  </form>
+}

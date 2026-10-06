@@ -1,0 +1,166 @@
+<section class="page-header">
+  <div>
+    <h1>Serviços</h1>
+    <p>Mão de obra que a oficina realiza.</p>
+  </div>
+  <button type="button" class="btn btn--primary" (click)="openCreate()">
+    <app-icon name="plus" />
+    Novo serviço
+  </button>
+</section>
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar serviços</span>
+      <input type="search" placeholder="Buscar serviço" [value]="search()" (input)="onSearch($any($event.target).value)" />
+    </label>
+
+    <div class="toolbar__filters">
+      <label class="category-filter">
+        <span class="sr-only">Filtrar por categoria</span>
+        <select [value]="category()" (change)="onCategory($any($event.target).value)">
+          <option value="all">Todas as categorias</option>
+          @for (item of categories; track item.value) {
+            <option [value]="item.value">{{ item.label }}</option>
+          }
+        </select>
+      </label>
+
+      <div class="segmented" role="group" aria-label="Filtrar por status">
+        @for (filter of statusFilters; track filter.value) {
+          <button
+            type="button"
+            [class.is-active]="status() === filter.value"
+            [attr.aria-pressed]="status() === filter.value"
+            (click)="onStatus(filter.value)"
+          >
+            {{ filter.label }}
+          </button>
+        }
+      </div>
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (loadError()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar os serviços</strong>
+        <p>Verifique sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="reload()">Tentar novamente</button>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon [name]="hasFilters() ? 'search' : 'wrench'" /></span>
+          @if (hasFilters()) {
+            <strong>Nenhum serviço encontrado</strong>
+            <p>Tente outro termo ou limpe os filtros.</p>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="clearFilters()">Limpar filtros</button>
+          } @else {
+            <strong>Nenhum serviço cadastrado</strong>
+            <p>Cadastre a mão de obra que a oficina realiza ou comece com uma lista de serviços comuns.</p>
+            <div class="empty-state__actions">
+              <button type="button" class="btn btn--primary btn--sm" (click)="importSuggestions()" [disabled]="importing()">
+                @if (importing()) {
+                  <span class="spinner"></span>
+                } @else {
+                  <app-icon name="check" [size]="16" />
+                }
+                Usar lista de serviços comuns
+              </button>
+              <button type="button" class="btn btn--ghost btn--sm" (click)="openCreate()">
+                <app-icon name="plus" [size]="16" /> Cadastrar manualmente
+              </button>
+            </div>
+            <small class="muted">Troca de amortecedor, correia dentada, pastilhas de freio, alinhamento e outros. Dá para editar depois.</small>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Serviço</th>
+                <th>Categoria</th>
+                <th>Status</th>
+                <th class="data-table__actions"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (service of page.data; track service.id) {
+                <tr class="is-clickable" [class.is-inactive]="!service.is_active" (click)="openEdit(service)">
+                  <td>
+                    <div class="service">
+                      <span class="service__icon"><app-icon name="wrench" [size]="16" /></span>
+                      <span class="service__text">
+                        <strong>{{ service.name }}</strong>
+                        @if (service.description) {
+                          <small [title]="service.description">{{ service.description }}</small>
+                        }
+                      </span>
+                    </div>
+                  </td>
+                  <td><span class="badge">{{ service.category_label }}</span></td>
+                  <td>
+                    <span class="badge badge--dot" [class.badge--success]="service.is_active">
+                      {{ service.is_active ? 'Ativo' : 'Inativo' }}
+                    </span>
+                  </td>
+                  <td class="data-table__actions" (click)="$event.stopPropagation()">
+                    <div class="actions">
+                      <button type="button" class="btn btn--icon" title="Editar" [attr.aria-label]="'Editar ' + service.name" (click)="openEdit(service)">
+                        <app-icon name="pencil" [size]="16" />
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--icon"
+                        [class.is-danger]="service.is_active"
+                        [title]="service.is_active ? 'Desativar' : 'Reativar'"
+                        [attr.aria-label]="(service.is_active ? 'Desativar ' : 'Reativar ') + service.name"
+                        (click)="toggleActive(service)"
+                      >
+                        <app-icon name="power" [size]="16" />
+                      </button>
+                      @if (canDelete()) {
+                        <button
+                          type="button"
+                          class="btn btn--icon is-danger"
+                          title="Excluir"
+                          [attr.aria-label]="'Excluir ' + service.name"
+                          (click)="pendingDelete.set(service)"
+                        >
+                          <app-icon name="trash" [size]="16" />
+                        </button>
+                      }
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>
+
+<app-service-form-dialog [open]="formOpen()" [service]="editing()" (saved)="reload()" (closed)="closeForm()" />
+
+<app-confirm-dialog
+  [open]="pendingDelete() !== null"
+  title="Excluir serviço?"
+  [message]="'“' + (pendingDelete()?.name ?? '') + '” sairá do catálogo. Se a oficina só deixou de fazer o serviço, prefira desativar.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="confirmDelete()"
+  (cancelled)="pendingDelete.set(null)"
+/>

@@ -1,0 +1,125 @@
+<?php
+
+namespace App\Models;
+
+use App\Enums\ServiceOrderStatus;
+use Database\Factories\ServiceOrderFactory;
+use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+
+#[Fillable(['mileage', 'complaint', 'notes', 'expected_at', 'discount_cents'])]
+class ServiceOrder extends Model
+{
+    /** @use HasFactory<ServiceOrderFactory> */
+    use HasFactory;
+
+    /**
+     * @return array<string, string>
+     */
+    protected function casts(): array
+    {
+        return [
+            'status' => ServiceOrderStatus::class,
+            'mileage' => 'integer',
+            'expected_at' => 'date',
+            'started_at' => 'datetime',
+            'completed_at' => 'datetime',
+            'delivered_at' => 'datetime',
+            'canceled_at' => 'datetime',
+            'labor_total_cents' => 'integer',
+            'parts_total_cents' => 'integer',
+            'discount_cents' => 'integer',
+            'total_cents' => 'integer',
+            'budget_sent_at' => 'datetime',
+            'budget_approved_at' => 'datetime',
+            'budget_approved_total_cents' => 'integer',
+        ];
+    }
+
+    public function isBudgetApproved(): bool
+    {
+        return $this->budget_approved_at !== null;
+    }
+
+    /**
+     * Orçamento mudou depois que o cliente aprovou: valor diferente do aprovado
+     * ou serviço/peça nova ainda sem valor.
+     */
+    public function budgetChangedAfterApproval(): bool
+    {
+        return $this->isBudgetApproved()
+            && ($this->budget_approved_total_cents !== $this->total_cents || $this->unpricedCount() > 0);
+    }
+
+    /** Serviços e peças ainda com valor "a definir". */
+    public function unpricedCount(): int
+    {
+        $items = $this->relationLoaded('items')
+            ? $this->items->whereNull('price_cents')->count()
+            : $this->items()->whereNull('price_cents')->count();
+        $parts = $this->relationLoaded('parts')
+            ? $this->parts->whereNull('unit_price_cents')->count()
+            : $this->parts()->whereNull('unit_price_cents')->count();
+
+        return $items + $parts;
+    }
+
+    /** Número exibido para o cliente: OS 00042. */
+    public function number(): string
+    {
+        return str_pad((string) $this->id, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Cliente/veículo continuam visíveis no histórico mesmo se forem excluídos depois.
+     *
+     * @return BelongsTo<Customer, $this>
+     */
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(Customer::class)->withTrashed();
+    }
+
+    /**
+     * @return BelongsTo<Vehicle, $this>
+     */
+    public function vehicle(): BelongsTo
+    {
+        return $this->belongsTo(Vehicle::class)->withTrashed();
+    }
+
+    /**
+     * @return BelongsTo<User, $this>
+     */
+    public function creator(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by');
+    }
+
+    /**
+     * @return HasMany<ServiceOrderItem, $this>
+     */
+    public function items(): HasMany
+    {
+        return $this->hasMany(ServiceOrderItem::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<ServiceOrderPart, $this>
+     */
+    public function parts(): HasMany
+    {
+        return $this->hasMany(ServiceOrderPart::class)->orderBy('position')->orderBy('id');
+    }
+
+    /**
+     * @return HasMany<ServiceOrderEvent, $this>
+     */
+    public function events(): HasMany
+    {
+        return $this->hasMany(ServiceOrderEvent::class)->orderByDesc('created_at')->orderByDesc('id');
+    }
+}

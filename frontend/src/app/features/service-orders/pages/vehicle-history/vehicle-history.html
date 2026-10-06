@@ -1,0 +1,114 @@
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else if (history(); as history) {
+  <section class="page-header">
+    <div>
+      @if (!history.customer.deleted) {
+        <a [routerLink]="['/customers', history.customer.id, 'edit']" class="back-link">
+          <app-icon name="arrow-left" [size]="14" /> {{ history.customer.name }}
+        </a>
+      } @else {
+        <a routerLink="/service-orders" class="back-link"><app-icon name="arrow-left" [size]="14" /> Ordens de serviço</a>
+      }
+      <h1>Histórico do veículo</h1>
+      <p>Todos os serviços feitos neste veículo na oficina.</p>
+    </div>
+    @if (!history.customer.deleted) {
+      <a
+        class="btn btn--primary"
+        routerLink="/service-orders/new"
+        [queryParams]="{ customer: history.customer.id, vehicle: history.vehicle.id }"
+      >
+        <app-icon name="plus" /> Nova OS para este veículo
+      </a>
+    }
+  </section>
+
+  <article class="card vehicle">
+    <span class="vehicle__icon"><app-icon [name]="typeIcon()" [size]="24" /></span>
+    <div class="vehicle__main">
+      <strong>{{ history.vehicle.brand }} {{ history.vehicle.model }}</strong>
+      <div class="vehicle__meta">
+        @if (history.vehicle.plate) {
+          <span class="plate">{{ history.vehicle.plate | brFormat: 'plate' }}</span>
+        }
+        @if (history.vehicle.model_year) {
+          <span>{{ history.vehicle.model_year }}</span>
+        }
+        @if (history.vehicle.color) {
+          <span>{{ history.vehicle.color }}</span>
+        }
+        @if (history.vehicle.fuel_label) {
+          <span>{{ history.vehicle.fuel_label }}</span>
+        }
+      </div>
+    </div>
+    <dl class="stats">
+      <div>
+        <dt>Km atual</dt>
+        <dd>{{ history.vehicle.mileage !== null ? (history.vehicle.mileage | brFormat: 'mileage') + ' km' : '—' }}</dd>
+      </div>
+      <div>
+        <dt>Ordens de serviço</dt>
+        <dd>{{ history.orders.length }}</dd>
+      </div>
+      <div>
+        <dt>Serviços feitos</dt>
+        <dd>{{ servicesDone() }}</dd>
+      </div>
+    </dl>
+  </article>
+
+  @if (history.orders.length === 0) {
+    <div class="card empty-state">
+      <span class="empty-state__icon"><app-icon name="clipboard" /></span>
+      <strong>Nenhum serviço registrado ainda</strong>
+      <p>As ordens de serviço deste veículo vão aparecer aqui.</p>
+    </div>
+  } @else {
+    <ol class="orders">
+      @for (order of history.orders; track order.id) {
+        <li class="card order" [class.is-canceled]="order.status === 'canceled'">
+          <header class="order__header">
+            <div class="order__title">
+              <a [routerLink]="['/service-orders', order.id]" class="order__number">OS #{{ order.number }}</a>
+              <app-status-badge [status]="order.status" />
+            </div>
+            <div class="order__meta">
+              <span><app-icon name="calendar" [size]="14" /> {{ order.created_at | date: 'dd/MM/yyyy' }}</span>
+              @if (order.delivered_at) {
+                <span><app-icon name="car" [size]="14" /> Entregue em {{ order.delivered_at | date: 'dd/MM/yyyy' }}</span>
+              }
+              @if (order.mileage !== null) {
+                <span><app-icon name="trending-up" [size]="14" /> {{ order.mileage | brFormat: 'mileage' }} km</span>
+              }
+              @if (order.total_cents) {
+                <span class="order__total"><app-icon name="wallet" [size]="14" /> {{ order.total_cents | money }}</span>
+              }
+            </div>
+          </header>
+
+          @if (order.complaint) {
+            <p class="order__complaint"><strong>Relato:</strong> {{ order.complaint }}</p>
+          }
+
+          <ul class="order__items">
+            @for (item of order.items; track item.id) {
+              <li [class.is-done]="item.is_done">
+                <app-icon [name]="item.is_done ? 'check' : 'clock'" [size]="14" />
+                <span class="order__item-name">
+                  {{ item.name }}
+                  @if (item.notes) {
+                    <small>· {{ item.notes }}</small>
+                  }
+                </span>
+              </li>
+            }
+          </ul>
+
+          <a [routerLink]="['/service-orders', order.id]" class="order__link">Ver OS completa <app-icon name="arrow-right" [size]="14" /></a>
+        </li>
+      }
+    </ol>
+  }
+}

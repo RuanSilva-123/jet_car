@@ -1,0 +1,79 @@
+<div class="login">
+  <header class="login__header">
+    <h2>Entrar no painel</h2>
+    <p>Use as credenciais fornecidas pelo administrador.</p>
+  </header>
+
+  @if (errorMessage(); as message) {
+    <div class="login__alert" role="alert">
+      <app-icon name="alert" />
+      <span>{{ message }}</span>
+    </div>
+  }
+
+  <form [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <div class="field" [class.field--invalid]="hasError('email', 'required') || hasError('email', 'email')">
+      <label for="email">E-mail</label>
+      <div class="field__control">
+        <app-icon name="mail" />
+        <input
+          id="email"
+          type="email"
+          formControlName="email"
+          autocomplete="username"
+          placeholder="voce@empresa.com"
+          autofocus
+        />
+      </div>
+      @if (hasError('email', 'required')) {
+        <small class="field__error">Informe o e-mail.</small>
+      } @else if (hasError('email', 'email')) {
+        <small class="field__error">Informe um e-mail válido.</small>
+      }
+    </div>
+
+    <div class="field" [class.field--invalid]="hasError('password', 'required')">
+      <label for="password">Senha</label>
+      <div class="field__control">
+        <app-icon name="lock" />
+        <input
+          id="password"
+          [type]="showPassword() ? 'text' : 'password'"
+          formControlName="password"
+          autocomplete="current-password"
+          placeholder="Digite sua senha"
+        />
+        <button
+          type="button"
+          class="field__action"
+          (click)="showPassword.set(!showPassword())"
+          [attr.aria-label]="showPassword() ? 'Ocultar senha' : 'Mostrar senha'"
+        >
+          <app-icon [name]="showPassword() ? 'eye-off' : 'eye'" />
+        </button>
+      </div>
+      @if (hasError('password', 'required')) {
+        <small class="field__error">Informe a senha.</small>
+      }
+    </div>
+
+    <label class="checkbox">
+      <input type="checkbox" formControlName="remember" />
+      <span>Manter conectado neste dispositivo</span>
+    </label>
+
+    <button type="submit" class="btn btn--primary btn--block login__submit" [disabled]="submitting()">
+      @if (submitting()) {
+        <span class="spinner"></span> Entrando...
+      } @else {
+        Entrar
+        <app-icon name="arrow-right" />
+      }
+    </button>
+  </form>
+
+  <p class="login__help">
+    <app-icon name="users" [size]="16" />
+    <span>Não tem acesso? Solicite uma conta ao administrador master.</span>
+  </p>
+</div>

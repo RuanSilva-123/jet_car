@@ -1,0 +1,242 @@
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else if (order(); as current) {
+  <section class="page-header">
+    <div>
+      <a [routerLink]="['/service-orders', current.id]" class="back-link"><app-icon name="arrow-left" [size]="14" /> OS #{{ current.number }}</a>
+      <h1>Montar orçamento</h1>
+      <p>
+        {{ current.customer?.name }} · {{ current.vehicle?.brand }} {{ current.vehicle?.model }}
+        @if (current.vehicle?.plate) {
+          · {{ current.vehicle?.plate | brFormat: 'plate' }}
+        }
+      </p>
+    </div>
+  </section>
+
+  <form class="card" (submit)="$event.preventDefault(); submit()" novalidate>
+    @if (formError(); as message) {
+      <div class="form-alert" role="alert"><app-icon name="alert" /> <span>{{ message }}</span></div>
+    }
+
+    @if (current.complaint) {
+      <div class="complaint">
+        <app-icon name="message" [size]="16" />
+        <div>
+          <strong>Relato do cliente</strong>
+          <p>{{ current.complaint }}</p>
+        </div>
+      </div>
+    }
+
+    <!-- Mão de obra -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Mão de obra <span class="count">{{ items().length }}</span></h2>
+        <p>Valor de cada serviço. Deixe em branco o que ainda não sabe; o orçamento só é enviado com tudo preenchido.</p>
+      </header>
+
+      <div class="form-section__fields">
+        @if (items().length) {
+          <ol class="items">
+            @for (item of items(); track item.key; let index = $index) {
+              <li class="item" [class.is-unpriced]="!item.price.trim()">
+                <span class="item__index">{{ index + 1 }}</span>
+                <div class="item__body">
+                  <strong>
+                    {{ item.name }}
+                    @if (item.is_done) {
+                      <span class="tag tag--success">feito</span>
+                    }
+                  </strong>
+                  <input
+                    class="item__notes"
+                    [value]="item.notes"
+                    (input)="updateItem(item.key, { notes: $any($event.target).value })"
+                    placeholder="Observação (opcional), ex.: dianteiro esquerdo"
+                    maxlength="500"
+                    [attr.aria-label]="'Observação de ' + item.name"
+                  />
+                </div>
+                <label class="money-input">
+                  <span>R$</span>
+                  <input
+                    [value]="item.price"
+                    (input)="updateItem(item.key, { price: money($event) })"
+                    inputmode="numeric"
+                    placeholder="a definir"
+                    [attr.aria-label]="'Valor da mão de obra de ' + item.name"
+                  />
+                </label>
+                <button
+                  type="button"
+                  class="btn btn--icon is-danger"
+                  (click)="removeItem(item.key)"
+                  [disabled]="item.is_done"
+                  [attr.aria-label]="'Remover ' + item.name"
+                  [title]="item.is_done ? 'Serviço já feito' : 'Remover'"
+                >
+                  <app-icon name="trash" [size]="16" />
+                </button>
+              </li>
+            }
+          </ol>
+        } @else {
+          <p class="items__empty">Nenhum serviço na OS ainda.</p>
+        }
+
+        <div class="field" [class.field--invalid]="errorFor('items')">
+          <label for="budget-service">Incluir serviço</label>
+          <div class="add-service">
+            <app-combobox
+              class="add-service__search"
+              inputId="budget-service"
+              [remote]="true"
+              [options]="serviceOptions()"
+              [value]="null"
+              [loading]="searchingServices()"
+              placeholder="Buscar no catálogo, ex.: amortecedor"
+              emptyText="Nenhum serviço ativo encontrado"
+              (queryChange)="onServiceQuery($event)"
+              (selected)="addService($event)"
+            />
+            <button type="button" class="btn btn--ghost" (click)="newServiceOpen.set(true)" title="Cadastrar um serviço que ainda não está no catálogo">
+              <app-icon name="plus" [size]="16" /> Novo no catálogo
+            </button>
+          </div>
+          @if (errorFor('items'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Peças -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Peças <span class="count">{{ parts().length }}</span></h2>
+        <p>Quantidade e valor unitário de cada peça.</p>
+      </header>
+
+      <div class="form-section__fields">
+        @if (parts().length) {
+          <div class="parts" role="table" aria-label="Peças do orçamento">
+            <div class="parts__head" role="row">
+              <span role="columnheader">Peça</span>
+              <span role="columnheader">Código</span>
+              <span role="columnheader">Qtd.</span>
+              <span role="columnheader">Valor unit.</span>
+              <span role="columnheader" class="right">Total</span>
+              <span></span>
+            </div>
+            @for (part of parts(); track part.key) {
+              <div class="part" role="row" [class.is-unpriced]="!part.unit_price.trim()">
+                <input
+                  class="part__name"
+                  [value]="part.name"
+                  (input)="updatePart(part.key, { name: $any($event.target).value })"
+                  placeholder="Ex.: Amortecedor dianteiro"
+                  maxlength="150"
+                  aria-label="Nome da peça"
+                />
+                <input
+                  [value]="part.part_number"
+                  (input)="updatePart(part.key, { part_number: $any($event.target).value })"
+                  placeholder="Opcional"
+                  maxlength="60"
+                  aria-label="Código da peça"
+                />
+                <input
+                  class="part__qty"
+                  [value]="part.quantity"
+                  (input)="updatePart(part.key, { quantity: quantity($event) })"
+                  inputmode="decimal"
+                  aria-label="Quantidade"
+                />
+                <label class="money-input money-input--compact">
+                  <span>R$</span>
+                  <input
+                    [value]="part.unit_price"
+                    (input)="updatePart(part.key, { unit_price: money($event) })"
+                    inputmode="numeric"
+                    placeholder="a definir"
+                    aria-label="Valor unitário"
+                  />
+                </label>
+                @if (partTotal(part) !== null) {
+                  <strong class="part__total">{{ partTotal(part) ?? 0 | money }}</strong>
+                } @else {
+                  <span class="part__total muted">—</span>
+                }
+                <button type="button" class="btn btn--icon is-danger" (click)="removePart(part.key)" aria-label="Remover peça" title="Remover">
+                  <app-icon name="trash" [size]="16" />
+                </button>
+              </div>
+            }
+          </div>
+        }
+        @if (errorFor('parts'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+        <div>
+          <button type="button" class="btn btn--ghost btn--sm" (click)="addPart()">
+            <app-icon name="plus" [size]="16" /> Incluir peça
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Resumo -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Resumo</h2>
+        <p>Total que aparece no PDF enviado ao cliente.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <dl class="summary-totals">
+          <div><dt>Mão de obra</dt><dd>{{ laborTotal() | money }}</dd></div>
+          <div><dt>Peças</dt><dd>{{ partsTotal() | money }}</dd></div>
+          <div class="summary-totals__discount" [class.is-invalid]="discountTooHigh() || errorFor('discount_cents')">
+            <dt><label for="budget-discount">Desconto</label></dt>
+            <dd>
+              <label class="money-input money-input--compact">
+                <span>− R$</span>
+                <input id="budget-discount" [value]="discount()" (input)="discount.set(money($event))" inputmode="numeric" placeholder="0,00" />
+              </label>
+            </dd>
+          </div>
+          <div class="summary-totals__total"><dt>Total</dt><dd>{{ total() | money }}</dd></div>
+        </dl>
+        @if (errorFor('discount_cents'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+        @if (unpriced() > 0 && lineCount() > 0) {
+          <p class="notice">
+            <app-icon name="alert" [size]="16" />
+            {{ unpriced() === 1 ? '1 item ainda sem valor' : unpriced() + ' itens ainda sem valor' }}. Você pode salvar e completar depois.
+          </p>
+        }
+        @if (current.budget_approved_at && total() !== current.budget_approved_total_cents) {
+          <p class="notice">
+            <app-icon name="alert" [size]="16" />
+            O cliente aprovou {{ current.budget_approved_total_cents | money }}. Ao salvar com outro valor, envie o novo orçamento para ele aprovar.
+          </p>
+        }
+      </div>
+    </section>
+
+    <footer class="form-footer">
+      <a [routerLink]="['/service-orders', current.id]" class="btn btn--ghost">Cancelar</a>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span> Salvando...
+        } @else {
+          <app-icon name="check" [size]="16" /> Salvar orçamento
+        }
+      </button>
+    </footer>
+  </form>
+
+  <app-service-form-dialog [open]="newServiceOpen()" (saved)="onServiceCreated($event)" (closed)="newServiceOpen.set(false)" />
+}

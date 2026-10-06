@@ -1,0 +1,153 @@
+<section class="page-header">
+  <div>
+    <h1>Usuários</h1>
+    <p>Pessoas com acesso ao painel.</p>
+  </div>
+  <a routerLink="new" class="btn btn--primary">
+    <app-icon name="plus" />
+    Novo usuário
+  </a>
+</section>
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar usuários</span>
+      <input
+        type="search"
+        placeholder="Buscar por nome ou e-mail"
+        [value]="search()"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </label>
+
+    <div class="segmented" role="group" aria-label="Filtrar por status">
+      @for (filter of statusFilters; track filter.value) {
+        <button
+          type="button"
+          [class.is-active]="status() === filter.value"
+          [attr.aria-pressed]="status() === filter.value"
+          (click)="onStatus(filter.value)"
+        >
+          {{ filter.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (loadError()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar os usuários</strong>
+        <p>Verifique sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="reload()">Tentar novamente</button>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon [name]="hasFilters() ? 'search' : 'users'" /></span>
+          @if (hasFilters()) {
+            <strong>Nenhum usuário encontrado</strong>
+            <p>Tente buscar por outro nome ou e-mail.</p>
+            <button type="button" class="btn btn--ghost btn--sm" (click)="clearFilters()">Limpar filtros</button>
+          } @else {
+            <strong>Nenhum usuário cadastrado</strong>
+            <p>Cadastre as pessoas que terão acesso ao painel.</p>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Usuário</th>
+                <th>Perfil</th>
+                <th>Status</th>
+                <th>Último acesso</th>
+                <th class="data-table__actions"><span class="sr-only">Ações</span></th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (user of page.data; track user.id) {
+                @let isSelf = user.id === currentUserId();
+                <tr [class.is-inactive]="!user.is_active">
+                  <td>
+                    <div class="identity">
+                      <span class="avatar" [class.avatar--muted]="!user.is_active">{{ initials(user.name) }}</span>
+                      <span class="identity__text">
+                        <strong>
+                          {{ user.name }}
+                          @if (isSelf) {
+                            <span class="you">Você</span>
+                          }
+                        </strong>
+                        <small>{{ user.email }}</small>
+                      </span>
+                    </div>
+                  </td>
+                  <td>
+                    <span class="badge" [class.badge--ink]="user.role === 'master'">{{ user.role_label }}</span>
+                  </td>
+                  <td>
+                    <span class="badge badge--dot" [class.badge--success]="user.is_active">
+                      {{ user.is_active ? 'Ativo' : 'Inativo' }}
+                    </span>
+                  </td>
+                  <td class="muted">
+                    {{ user.last_login_at ? (user.last_login_at | date: "dd/MM/yyyy 'às' HH:mm") : 'Nunca acessou' }}
+                  </td>
+                  <td class="data-table__actions">
+                    <div class="actions">
+                      <a class="btn btn--icon" [routerLink]="[user.id, 'edit']" title="Editar" [attr.aria-label]="'Editar ' + user.name">
+                        <app-icon name="pencil" [size]="16" />
+                      </a>
+                      <button
+                        type="button"
+                        class="btn btn--icon"
+                        [class.is-danger]="user.is_active"
+                        [disabled]="isSelf"
+                        [title]="isSelf ? 'Você não pode desativar a própria conta' : user.is_active ? 'Desativar' : 'Reativar'"
+                        [attr.aria-label]="(user.is_active ? 'Desativar ' : 'Reativar ') + user.name"
+                        (click)="toggleActive(user)"
+                      >
+                        <app-icon name="power" [size]="16" />
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn--icon is-danger"
+                        [disabled]="isSelf"
+                        [title]="isSelf ? 'Você não pode excluir a própria conta' : 'Excluir'"
+                        [attr.aria-label]="'Excluir ' + user.name"
+                        (click)="askDelete(user)"
+                      >
+                        <app-icon name="trash" [size]="16" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>
+
+<app-confirm-dialog
+  [open]="pending() !== null"
+  [title]="confirmTitle()"
+  [message]="confirmMessage()"
+  [confirmLabel]="pending()?.kind === 'delete' ? 'Excluir' : 'Desativar'"
+  [icon]="pending()?.kind === 'delete' ? 'trash' : 'power'"
+  tone="danger"
+  [busy]="acting()"
+  (confirmed)="confirmPending()"
+  (cancelled)="cancelPending()"
+/>

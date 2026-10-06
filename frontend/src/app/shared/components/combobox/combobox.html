@@ -1,0 +1,58 @@
+<div class="combobox" [class.is-open]="open()">
+  <div
+    class="field__control"
+    [class.is-disabled]="disabled()"
+    [class.is-invalid]="invalid()"
+    (mousedown)="onControlMousedown($event)"
+  >
+    <input
+      #field
+      [id]="inputId()"
+      type="text"
+      role="combobox"
+      autocomplete="off"
+      [attr.aria-expanded]="open()"
+      [attr.aria-controls]="listId()"
+      [attr.aria-activedescendant]="open() && visible().length ? listId() + '-' + activeIndex() : null"
+      [placeholder]="loading() ? 'Carregando...' : open() && selectedLabel() ? selectedLabel() : placeholder()"
+      [value]="open() ? query() : selectedLabel()"
+      [disabled]="disabled()"
+      (focus)="openList()"
+      (click)="openList()"
+      (input)="onQuery($any($event.target).value)"
+      (keydown)="onKeydown($event)"
+      (blur)="closeList()"
+    />
+    @if (loading()) {
+      <span class="spinner spinner--dark combobox__spinner"></span>
+    } @else {
+      <app-icon class="combobox__chevron" name="chevron-right" [size]="16" />
+    }
+  </div>
+
+  @if (open() && !loading()) {
+    <ul class="combobox__list" role="listbox" [id]="listId()">
+      @for (option of visible(); track option.code; let index = $index) {
+        <li
+          role="option"
+          [id]="listId() + '-' + index"
+          [class.is-active]="index === activeIndex()"
+          [class.is-selected]="option.code === value()"
+          [attr.aria-selected]="option.code === value()"
+          (mousedown)="$event.preventDefault(); choose(option)"
+          (mousemove)="activeIndex.set(index)"
+        >
+          <span>{{ option.name }}</span>
+          @if (option.code === value()) {
+            <app-icon name="check" [size]="14" />
+          }
+        </li>
+      } @empty {
+        <li class="combobox__empty">{{ emptyText() }}@if (query()) { para "{{ query() }}"}</li>
+      }
+      @if (hiddenCount() > 0) {
+        <li class="combobox__more">+{{ hiddenCount() }} opções — digite para refinar a busca</li>
+      }
+    </ul>
+  }
+</div>

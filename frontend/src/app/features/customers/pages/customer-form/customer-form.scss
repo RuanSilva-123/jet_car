@@ -1,0 +1,140 @@
+:host {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
+}
+
+// Veículos ocupam a largura toda (cartões grandes)
+.form-section--stacked {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+}
+
+.form-section__intro--row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.optional {
+  color: var(--color-text-muted);
+  font-weight: 400;
+}
+
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--color-neutral-soft);
+  color: var(--color-text-muted);
+  font-family: var(--font-sans);
+  font-size: 12px;
+}
+
+.choices--compact {
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+
+  .choice {
+    align-items: center;
+
+    input {
+      margin: 0;
+    }
+
+    app-icon {
+      color: var(--color-text-muted);
+    }
+
+    &:has(input:checked) app-icon {
+      color: var(--color-brand);
+    }
+  }
+}
+
+.checkbox--sm {
+  font-size: 13px;
+}
+
+// Endereço em grade de 12 colunas. As quebras usam a largura do próprio bloco
+// (container query), pois a coluna de descrição da seção já ocupa parte da tela.
+.address {
+  container-type: inline-size;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: 20px 16px;
+
+  // Largo: CEP | Logradouro | Número  /  Complemento | Bairro | Cidade | UF
+  .field--cep { grid-column: span 3; }
+  .field--street { grid-column: span 7; }
+  .field--number { grid-column: span 2; }
+  .field--complement { grid-column: span 4; }
+  .field--neighborhood { grid-column: span 3; }
+  .field--city { grid-column: span 3; }
+  .field--state { grid-column: span 2; }
+
+  // Médio: CEP | Logradouro  /  Número | Complemento  /  Bairro | Cidade | UF
+  @container (max-width: 820px) {
+    .field--cep { grid-column: span 4; }
+    .field--street { grid-column: span 8; }
+    .field--number { grid-column: span 4; }
+    .field--complement { grid-column: span 8; }
+    .field--neighborhood { grid-column: span 5; }
+    .field--city { grid-column: span 5; }
+    .field--state { grid-column: span 2; }
+  }
+
+  // Estreito: um campo por linha
+  @container (max-width: 480px) {
+    .field { grid-column: 1 / -1; }
+  }
+}
+
+.cep-spinner {
+  width: 14px;
+  height: 14px;
+}
+
+.cep-ok {
+  color: var(--color-success);
+}
+
+.vehicles {
+  display: grid;
+  gap: 16px;
+
+  &__empty {
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    padding: 36px 16px;
+    border: 1.5px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: border-color 0.15s, color 0.15s;
+
+    strong {
+      color: var(--color-text);
+    }
+
+    &:hover {
+      border-color: var(--color-brand);
+      color: var(--color-brand);
+    }
+  }
+}
+
+.danger-link {
+  border-color: transparent;
+  color: var(--color-danger);
+
+  &:hover:not(:disabled) {
+    background: var(--color-danger-soft);
+    color: var(--color-danger);
+  }
+}

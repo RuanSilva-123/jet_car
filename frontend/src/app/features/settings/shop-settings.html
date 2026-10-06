@@ -1,0 +1,115 @@
+<section class="page-header">
+  <div>
+    <h1>Dados da oficina</h1>
+    <p>Informações que aparecem no cabeçalho e no rodapé dos PDFs de orçamento e de ordem de serviço.</p>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else {
+  <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Identificação</h2>
+        <p>Nome e contato da oficina, como o cliente vê no documento.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="form-grid">
+          <div class="field" [class.field--invalid]="errorFor('name')">
+            <label for="shop-name">Nome da oficina</label>
+            <div class="field__control"><input id="shop-name" formControlName="name" /></div>
+            @if (errorFor('name'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('document')">
+            <label for="shop-document">CNPJ <span class="optional">(opcional)</span></label>
+            <div class="field__control"><input id="shop-document" formControlName="document" appMask="cnpj" placeholder="00.000.000/0000-00" /></div>
+            @if (errorFor('document'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('phone')">
+            <label for="shop-phone">Telefone <span class="optional">(opcional)</span></label>
+            <div class="field__control">
+              <app-icon name="phone" />
+              <input id="shop-phone" formControlName="phone" appMask="phone" placeholder="(00) 0000-0000" />
+            </div>
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('email')">
+            <label for="shop-email">E-mail <span class="optional">(opcional)</span></label>
+            <div class="field__control">
+              <app-icon name="mail" />
+              <input id="shop-email" type="email" formControlName="email" placeholder="contato@oficina.com.br" />
+            </div>
+            @if (errorFor('email'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+        </div>
+
+        <div class="field" [class.field--invalid]="errorFor('address')">
+          <label for="shop-address">Endereço <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="map-pin" />
+            <input id="shop-address" formControlName="address" placeholder="Rua, número · Bairro · Cidade / UF" />
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Orçamento</h2>
+        <p>Validade e observações impressas no PDF do orçamento.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="field days" [class.field--invalid]="errorFor('budget_validity_days')">
+          <label for="shop-validity">Validade do orçamento</label>
+          <div class="field__control">
+            <input id="shop-validity" type="number" min="1" max="365" formControlName="budget_validity_days" />
+            <span class="field__suffix">dias</span>
+          </div>
+          @if (errorFor('budget_validity_days'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+        <div class="field">
+          <label for="shop-notes">Observações do orçamento <span class="optional">(opcional)</span></label>
+          <div class="field__control field__control--textarea">
+            <textarea id="shop-notes" rows="3" formControlName="budget_notes"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Garantia</h2>
+        <p>Texto impresso no comprovante do serviço realizado.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="field">
+          <label for="shop-warranty" class="sr-only">Texto da garantia</label>
+          <div class="field__control field__control--textarea">
+            <textarea id="shop-warranty" rows="3" formControlName="warranty_text"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="form-footer">
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span> Salvando...
+        } @else {
+          <app-icon name="check" [size]="16" /> Salvar
+        }
+      </button>
+    </footer>
+  </form>
+}

@@ -1,0 +1,66 @@
+<div class="shell" [class.shell--sidebar-open]="sidebarOpen()">
+  <aside class="sidebar">
+    <div class="sidebar__top">
+      <app-logo class="sidebar__logo" />
+      <button type="button" class="sidebar__close" (click)="closeSidebar()" aria-label="Fechar menu">
+        <app-icon name="close" />
+      </button>
+    </div>
+
+    <nav class="sidebar__nav" aria-label="Menu principal">
+      @for (section of navigation(); track section.title) {
+        <p class="sidebar__section">{{ section.title }}</p>
+        @for (item of section.items; track item.label) {
+          @if (item.route) {
+            <a
+              class="sidebar__link"
+              [routerLink]="item.route"
+              routerLinkActive="sidebar__link--active"
+              (click)="closeSidebar()"
+            >
+              <app-icon [name]="item.icon" />
+              {{ item.label }}
+            </a>
+          } @else {
+            <span class="sidebar__link sidebar__link--disabled" title="Em breve">
+              <app-icon [name]="item.icon" />
+              {{ item.label }}
+              <span class="sidebar__badge">Em breve</span>
+            </span>
+          }
+        }
+      }
+    </nav>
+  </aside>
+
+  <div class="shell__backdrop" (click)="closeSidebar()"></div>
+
+  <div class="shell__main">
+    <header class="topbar">
+      <button type="button" class="topbar__menu" (click)="sidebarOpen.set(true)" aria-label="Abrir menu">
+        <app-icon name="menu" [size]="20" />
+      </button>
+
+      <div class="topbar__spacer"></div>
+
+      @if (user(); as user) {
+        <div class="topbar__user">
+          <span class="topbar__avatar">{{ initials() }}</span>
+          <span class="topbar__identity">
+            <strong>{{ user.name }}</strong>
+            <small>{{ user.role_label }}</small>
+          </span>
+        </div>
+      }
+
+      <button type="button" class="btn btn--ghost topbar__logout" (click)="logout()" [disabled]="loggingOut()">
+        <app-icon name="logout" />
+        <span>Sair</span>
+      </button>
+    </header>
+
+    <main class="content">
+      <router-outlet />
+    </main>
+  </div>
+</div>

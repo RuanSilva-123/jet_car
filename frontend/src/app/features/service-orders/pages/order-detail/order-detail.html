@@ -1,0 +1,566 @@
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else if (order(); as order) {
+  <section class="page-header">
+    <div>
+      <a routerLink="/service-orders" class="back-link"><app-icon name="arrow-left" [size]="14" /> Ordens de serviço</a>
+      <div class="title">
+        <h1>OS #{{ order.number }}</h1>
+        <app-status-badge [status]="order.status" size="lg" />
+      </div>
+      <p>
+        {{ order.vehicle?.brand }} {{ order.vehicle?.model }} · {{ order.customer?.name }} · entrada em
+        {{ order.created_at | date: "dd/MM/yyyy 'às' HH:mm" }}
+      </p>
+    </div>
+
+    <div class="header-actions">
+      @if (canEdit()) {
+        <a [routerLink]="['/service-orders', order.id, 'edit']" class="btn btn--ghost" title="Km, relato do cliente, previsão e observações">
+          <app-icon name="pencil" [size]="16" /> Dados de entrada
+        </a>
+        @if (lines() > 0 && nextStep()?.kind !== 'edit-budget') {
+          <a [routerLink]="['/service-orders', order.id, 'budget']" class="btn btn--ghost">
+            <app-icon name="wallet" [size]="16" /> {{ budgetReady() ? 'Editar orçamento' : 'Montar orçamento' }}
+          </a>
+        }
+      }
+      <button type="button" class="btn btn--ghost" (click)="openStatusDialog()" [disabled]="busy()">
+        <app-icon name="clock" [size]="16" /> Alterar status
+      </button>
+      @if (nextStep(); as step) {
+        <button type="button" class="btn btn--primary" (click)="runNextStep()" [disabled]="busy()">
+          @if (busy()) {
+            <span class="spinner"></span>
+          } @else {
+            <app-icon [name]="step.icon" [size]="16" />
+          }
+          {{ step.label }}
+        </button>
+      }
+    </div>
+  </section>
+
+  <!-- Etapas -->
+  @if (flow() !== null) {
+    <app-order-stepper [current]="flow()!" />
+  }
+
+  <!-- Avisos do fluxo -->
+  @if (order.budget_changed_after_approval && !order.is_final) {
+    <div class="banner banner--warning">
+      <app-icon name="alert" />
+      @if (unpriced() > 0) {
+        <span>Entrou {{ unpriced() === 1 ? '1 item novo' : unpriced() + ' itens novos' }} depois da aprovação. Defina os valores e registre a nova aprovação do cliente.</span>
+        <a [routerLink]="['/service-orders', order.id, 'budget']" class="btn btn--sm btn--primary">Montar orçamento</a>
+      } @else {
+        <span>
+          O orçamento mudou depois da aprovação: o cliente aprovou {{ order.budget_approved_total_cents | money }} e o valor atual é
+          {{ order.total_cents | money }}. Envie o novo orçamento e registre a nova aprovação.
+        </span>
+        <button type="button" class="btn btn--sm btn--primary" (click)="openDecision('approve')" [disabled]="busy()">Registrar nova aprovação</button>
+      }
+    </div>
+  } @else if (order.status === 'open') {
+    <div class="banner banner--info">
+      <app-icon [name]="lines() === 0 ? 'clipboard' : 'wallet'" />
+      <span>
+        @if (lines() === 0) {
+          Veículo deu entrada. Agora registre o que precisa ser feito: serviços e peças, ainda sem valores.
+        } @else if (unpriced() > 0) {
+          Terminou o diagnóstico? Monte o orçamento com os valores de cada serviço e peça.
+        } @else {
+          Orçamento pronto. Envie o PDF ou mande pelo WhatsApp para o cliente aprovar.
+        }
+      </span>
+    </div>
+  } @else if (order.status === 'waiting_approval') {
+    <div class="banner banner--warning">
+      <app-icon name="clock" />
+      <span>Orçamento enviado {{ order.budget_sent_at ? 'em ' + (order.budget_sent_at | date: "dd/MM 'às' HH:mm") : '' }}. Aguardando a resposta do cliente.</span>
+      <button type="button" class="btn btn--sm btn--ghost" (click)="openDecision('reject')" [disabled]="busy()">Cliente recusou</button>
+      <button type="button" class="btn btn--sm btn--primary" (click)="openDecision('approve')" [disabled]="busy()">Cliente aprovou</button>
+    </div>
+  } @else if (suggestComplete()) {
+    <div class="banner banner--success">
+      <app-icon name="check" />
+      <span>Todos os serviços foram feitos. Marcar a OS como concluída (pronta para retirada)?</span>
+      <button type="button" class="btn btn--sm btn--primary" (click)="completeOrder()" [disabled]="busy()">Concluir OS</button>
+    </div>
+  } @else if (order.is_final) {
+    <div class="banner">
+      <app-icon name="alert" />
+      <span>Esta OS está {{ order.status_label.toLowerCase() }}. Para alterar serviços ou valores, reabra a OS.</span>
+    </div>
+  }
+
+  <div class="layout">
+    <!-- Coluna principal -->
+    <div class="layout__main">
+      <!-- Entrada -->
+      <article class="card">
+        <div class="text-blocks">
+          <div>
+            <h3>Relato do cliente</h3>
+            @if (order.complaint) {
+              <p>{{ order.complaint }}</p>
+            } @else {
+              <p class="muted">Nada registrado na entrada.</p>
+            }
+          </div>
+          @if (order.notes) {
+            <div>
+              <h3>Observações internas</h3>
+              <p>{{ order.notes }}</p>
+            </div>
+          }
+        </div>
+      </article>
+
+      <!-- Serviços -->
+      <article class="card" id="diagnosis">
+        <header class="card__header card__header--row">
+          <div>
+            <h2>{{ approved() ? 'Serviços' : 'O que precisa ser feito' }}</h2>
+            <p>
+              @if (approved()) {
+                {{ doneCount() }} de {{ totalCount() }} serviços feitos
+              } @else {
+                Serviços do catálogo. Os valores entram na montagem do orçamento.
+              }
+            </p>
+          </div>
+          @if (approved() && totalCount() > 0) {
+            <div class="progress" [attr.aria-label]="progress() + '% concluído'">
+              <div class="progress__bar"><span [style.width.%]="progress()"></span></div>
+              <strong>{{ progress() }}%</strong>
+            </div>
+          }
+        </header>
+
+        @if (canEdit()) {
+          <div class="add-row">
+            <app-combobox
+              class="add-row__search"
+              inputId="diagnosis-service"
+              [remote]="true"
+              [options]="serviceOptions()"
+              [value]="null"
+              [loading]="searchingServices() || addingItem()"
+              placeholder="Adicionar serviço do catálogo, ex.: amortecedor"
+              emptyText="Nenhum serviço ativo encontrado"
+              (queryChange)="onServiceQuery($event)"
+              (selected)="addService($event)"
+            />
+            <button type="button" class="btn btn--ghost" (click)="newServiceOpen.set(true)" title="Cadastrar um serviço que ainda não está no catálogo">
+              <app-icon name="plus" [size]="16" /> Novo no catálogo
+            </button>
+          </div>
+        }
+
+        @if (order.items?.length) {
+          <ul class="checklist">
+            @for (item of order.items; track item.id; let index = $index) {
+              <li class="checklist__item" [class.is-done]="item.is_done">
+                @if (approved()) {
+                  <button
+                    type="button"
+                    class="check"
+                    role="checkbox"
+                    [attr.aria-checked]="item.is_done"
+                    [attr.aria-label]="(item.is_done ? 'Desmarcar ' : 'Marcar como feito: ') + item.name"
+                    [disabled]="order.is_final || savingItem() === item.id"
+                    (click)="toggleItem(item)"
+                  >
+                    @if (savingItem() === item.id) {
+                      <span class="spinner spinner--dark check__spinner"></span>
+                    } @else if (item.is_done) {
+                      <app-icon name="check" [size]="14" />
+                    }
+                  </button>
+                } @else {
+                  <span class="checklist__index">{{ index + 1 }}</span>
+                }
+                <div class="checklist__text">
+                  <strong>{{ item.name }}</strong>
+                  @if (item.notes) {
+                    <small>{{ item.notes }}</small>
+                  }
+                  @if (item.is_done && item.done_at) {
+                    <small class="done-info">
+                      Feito {{ item.done_at | date: "dd/MM 'às' HH:mm" }}
+                      @if (item.done_by) {
+                        por {{ item.done_by }}
+                      }
+                    </small>
+                  }
+                </div>
+                @if (item.price_cents === null) {
+                  <span class="checklist__price tbd">a definir</span>
+                } @else {
+                  <span class="checklist__price">{{ item.price_cents | money }}</span>
+                }
+                @if (canEdit() && !item.is_done) {
+                  <button
+                    type="button"
+                    class="btn btn--icon is-danger row-remove"
+                    (click)="removeItem(item)"
+                    [disabled]="removing() === 'item-' + item.id"
+                    [attr.aria-label]="'Remover ' + item.name"
+                    title="Remover"
+                  >
+                    <app-icon name="trash" [size]="15" />
+                  </button>
+                }
+              </li>
+            }
+          </ul>
+        } @else {
+          <p class="empty-lines">Nenhum serviço adicionado ainda.</p>
+        }
+      </article>
+
+      <!-- Peças -->
+      <article class="card">
+        <header class="card__header">
+          <h2>Peças</h2>
+          <p>
+            @if (order.parts?.length) {
+              {{ order.parts!.length }} {{ order.parts!.length === 1 ? 'peça' : 'peças' }}
+            } @else {
+              O que precisa comprar ou usar no serviço.
+            }
+          </p>
+        </header>
+
+        @if (canEdit()) {
+          <form class="part-form" (submit)="$event.preventDefault(); addPart()" novalidate>
+            <input
+              id="part-name"
+              class="part-form__name"
+              [value]="partName()"
+              (input)="partName.set($any($event.target).value)"
+              placeholder="Peça, ex.: Amortecedor dianteiro"
+              maxlength="150"
+              aria-label="Nome da peça"
+            />
+            <input
+              [value]="partNumber()"
+              (input)="partNumber.set($any($event.target).value)"
+              placeholder="Código (opcional)"
+              maxlength="60"
+              aria-label="Código da peça"
+            />
+            <input
+              class="part-form__qty"
+              [value]="partQuantity()"
+              (input)="onPartQuantity($event)"
+              inputmode="decimal"
+              aria-label="Quantidade"
+              title="Quantidade"
+            />
+            <button type="submit" class="btn btn--ghost" [disabled]="addingPart()">
+              @if (addingPart()) {
+                <span class="spinner spinner--dark"></span>
+              } @else {
+                <app-icon name="plus" [size]="16" />
+              }
+              Adicionar
+            </button>
+          </form>
+          @if (partError(); as error) {
+            <small class="field__error part-form__error">{{ error }}</small>
+          }
+        }
+
+        @if (order.parts?.length) {
+          <div class="table-scroll">
+            <table class="data-table parts-table">
+              <thead>
+                <tr>
+                  <th>Peça</th>
+                  <th class="center">Qtd.</th>
+                  <th class="right">Valor unit.</th>
+                  <th class="right">Total</th>
+                  @if (canEdit()) {
+                    <th><span class="sr-only">Ações</span></th>
+                  }
+                </tr>
+              </thead>
+              <tbody>
+                @for (part of order.parts; track part.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ part.name }}</strong>
+                      @if (part.part_number) {
+                        <small class="muted"> · Cód. {{ part.part_number }}</small>
+                      }
+                    </td>
+                    <td class="center">{{ part.quantity | brFormat: 'quantity' }}</td>
+                    @if (part.unit_price_cents === null) {
+                      <td class="right tbd">a definir</td>
+                      <td class="right tbd">—</td>
+                    } @else {
+                      <td class="right">{{ part.unit_price_cents | money }}</td>
+                      <td class="right"><strong>{{ part.total_cents ?? 0 | money }}</strong></td>
+                    }
+                    @if (canEdit()) {
+                      <td class="actions">
+                        <button
+                          type="button"
+                          class="btn btn--icon is-danger"
+                          (click)="removePart(part)"
+                          [disabled]="removing() === 'part-' + part.id"
+                          [attr.aria-label]="'Remover ' + part.name"
+                          title="Remover"
+                        >
+                          <app-icon name="trash" [size]="15" />
+                        </button>
+                      </td>
+                    }
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        } @else if (!canEdit()) {
+          <p class="empty-lines">Nenhuma peça.</p>
+        }
+      </article>
+
+      <!-- Linha do tempo -->
+      <article class="card">
+        <header class="card__header">
+          <h2>Histórico de movimentação</h2>
+          <p>Tudo o que aconteceu nesta OS, do mais recente ao mais antigo.</p>
+        </header>
+
+        <form class="comment" (submit)="$event.preventDefault(); addNote()">
+          <div class="field__control field__control--textarea">
+            <textarea
+              rows="2"
+              [value]="note()"
+              (input)="note.set($any($event.target).value)"
+              (keydown.control.enter)="addNote()"
+              placeholder="Adicionar comentário, ex.: cliente autorizou a troca por telefone"
+              maxlength="2000"
+              aria-label="Comentário"
+            ></textarea>
+          </div>
+          <button type="submit" class="btn btn--ghost btn--sm" [disabled]="!note().trim() || savingNote()">
+            <app-icon name="message" [size]="16" /> Comentar
+          </button>
+        </form>
+
+        <ol class="timeline">
+          @for (event of order.events; track event.id) {
+            <li class="timeline__item timeline__item--{{ event.type }}">
+              <span class="timeline__icon"><app-icon [name]="eventIcons[event.type]" [size]="14" /></span>
+              <div class="timeline__body">
+                <p class="timeline__text">{{ event.description }}</p>
+                <small>
+                  {{ event.created_at | date: "dd/MM/yyyy 'às' HH:mm" }}
+                  @if (event.user) {
+                    · {{ event.user }}
+                  }
+                </small>
+              </div>
+            </li>
+          }
+        </ol>
+      </article>
+    </div>
+
+    <!-- Coluna lateral -->
+    <aside class="layout__side">
+      <!-- Orçamento -->
+      <article class="card info budget">
+        <h3>Orçamento</h3>
+        @if (lines() === 0) {
+          <p class="budget__empty">Adicione os serviços e peças para montar o orçamento.</p>
+        } @else {
+          <dl class="budget__totals">
+            <div><dt>Mão de obra</dt><dd>{{ order.labor_total_cents | money }}</dd></div>
+            <div><dt>Peças</dt><dd>{{ order.parts_total_cents | money }}</dd></div>
+            @if (order.discount_cents > 0) {
+              <div class="budget__discount"><dt>Desconto</dt><dd>− {{ order.discount_cents | money }}</dd></div>
+            }
+            <div class="budget__total"><dt>Total</dt><dd>{{ order.total_cents | money }}</dd></div>
+          </dl>
+
+          <p class="budget__state" [class.is-approved]="approved() && !order.budget_changed_after_approval">
+            @if (unpriced() > 0) {
+              <app-icon name="alert" [size]="14" /> {{ unpriced() === 1 ? '1 item sem valor' : unpriced() + ' itens sem valor' }}
+            } @else if (approved() && !order.budget_changed_after_approval) {
+              <app-icon name="check" [size]="14" /> Aprovado pelo cliente em {{ order.budget_approved_at | date: 'dd/MM/yyyy' }}
+            } @else if (order.budget_changed_after_approval) {
+              <app-icon name="alert" [size]="14" /> Alterado após a aprovação ({{ order.budget_approved_total_cents | money }})
+            } @else if (order.budget_sent_at) {
+              <app-icon name="clock" [size]="14" /> Enviado em {{ order.budget_sent_at | date: "dd/MM 'às' HH:mm" }}
+            } @else {
+              <app-icon name="pencil" [size]="14" /> Pronto, ainda não enviado
+            }
+          </p>
+
+          @if (canEdit() && unpriced() > 0) {
+            <a [routerLink]="['/service-orders', order.id, 'budget']" class="btn btn--sm btn--primary budget__cta">
+              <app-icon name="wallet" [size]="14" /> Montar orçamento
+            </a>
+          }
+
+          @if (awaitingDecision()) {
+            <div class="budget__decision">
+              <button type="button" class="btn btn--sm btn--ghost" (click)="openDecision('reject')" [disabled]="busy()">Recusou</button>
+              <button type="button" class="btn btn--sm btn--primary" (click)="openDecision('approve')" [disabled]="busy()">
+                <app-icon name="check" [size]="14" /> Aprovou
+              </button>
+            </div>
+          }
+        }
+      </article>
+
+      <!-- Documentos -->
+      <article class="card info documents">
+        <h3>Documentos</h3>
+
+        @if (budgetPdf(); as pdf) {
+          <div class="document" [class.is-disabled]="lines() === 0">
+            <span class="document__icon"><app-icon name="wallet" [size]="18" /></span>
+            <span class="document__text">
+              <strong>Orçamento</strong>
+              <small>{{ budgetReady() ? 'Para o cliente aprovar' : 'Prévia: há itens sem valor' }}</small>
+            </span>
+            @if (lines() > 0) {
+              <a class="btn btn--icon" [href]="pdf.view" target="_blank" rel="noopener" title="Abrir / imprimir" aria-label="Abrir PDF do orçamento">
+                <app-icon name="external" [size]="16" />
+              </a>
+              <a class="btn btn--icon" [href]="pdf.download" title="Baixar PDF" aria-label="Baixar PDF do orçamento">
+                <app-icon name="download" [size]="16" />
+              </a>
+            }
+          </div>
+        }
+
+        @if (whatsappBudgetLink() && order.customer?.phone_is_whatsapp && budgetReady() && !order.is_final) {
+          <a class="btn btn--sm whatsapp-send" [href]="whatsappBudgetLink()" target="_blank" rel="noopener" (click)="onWhatsappSend()">
+            <app-icon name="whatsapp" [size]="16" /> Enviar orçamento pelo WhatsApp
+          </a>
+        }
+
+        @if (reportPdf(); as pdf) {
+          <div class="document" [class.document--highlight]="reportReady()">
+            <span class="document__icon"><app-icon name="clipboard" [size]="18" /></span>
+            <span class="document__text">
+              <strong>{{ reportReady() ? 'Ordem de serviço finalizada' : 'Ordem de serviço' }}</strong>
+              <small>{{ reportReady() ? 'O que foi feito, peças e garantia' : 'Situação atual dos serviços' }}</small>
+            </span>
+            <a class="btn btn--icon" [href]="pdf.view" target="_blank" rel="noopener" title="Abrir / imprimir" aria-label="Abrir PDF da ordem de serviço">
+              <app-icon name="external" [size]="16" />
+            </a>
+            <a class="btn btn--icon" [href]="pdf.download" title="Baixar PDF" aria-label="Baixar PDF da ordem de serviço">
+              <app-icon name="download" [size]="16" />
+            </a>
+          </div>
+        }
+      </article>
+
+      <article class="card info">
+        <h3>Cliente</h3>
+        @if (order.customer; as customer) {
+          <strong>{{ customer.name }}</strong>
+          <span class="info__line">
+            <app-icon name="phone" [size]="14" /> {{ customer.phone | brFormat: 'phone' }}
+            @if (customer.phone_is_whatsapp) {
+              <a class="whatsapp" [href]="whatsappLink(customer.phone)" target="_blank" rel="noopener" aria-label="Abrir WhatsApp" title="Abrir WhatsApp">
+                <app-icon name="whatsapp" [size]="14" />
+              </a>
+            }
+          </span>
+          @if (!customer.deleted) {
+            <a class="info__link" [routerLink]="['/customers', customer.id, 'edit']">Ver cadastro <app-icon name="arrow-right" [size]="14" /></a>
+          } @else {
+            <small class="muted">Cliente removido do cadastro</small>
+          }
+        }
+      </article>
+
+      <article class="card info">
+        <h3>Veículo</h3>
+        @if (order.vehicle; as vehicle) {
+          <strong>{{ vehicle.brand }} {{ vehicle.model }}</strong>
+          <span class="info__line">
+            @if (vehicle.plate) {
+              <span class="plate">{{ vehicle.plate | brFormat: 'plate' }}</span>
+            }
+            {{ vehicle.model_year ?? '' }} {{ vehicle.color ? '· ' + vehicle.color : '' }}
+          </span>
+          @if (order.mileage !== null) {
+            <span class="info__line"><app-icon name="trending-up" [size]="14" /> {{ order.mileage | brFormat: 'mileage' }} km na entrada</span>
+          }
+          <a class="info__link" [routerLink]="['/vehicles', vehicle.id, 'history']">Histórico do veículo <app-icon name="arrow-right" [size]="14" /></a>
+        }
+      </article>
+
+      <article class="card info">
+        <h3>Datas</h3>
+        <dl class="dates">
+          <dt>Entrada</dt>
+          <dd>{{ order.created_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          @if (order.expected_at) {
+            <dt>Previsão</dt>
+            <dd [class.late]="isLate()">
+              {{ order.expected_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+              @if (isLate()) {
+                (atrasada)
+              }
+            </dd>
+          }
+          @if (order.budget_sent_at) {
+            <dt>Orçamento</dt>
+            <dd>{{ order.budget_sent_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          @if (order.budget_approved_at) {
+            <dt>Aprovação</dt>
+            <dd>{{ order.budget_approved_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          @if (order.started_at) {
+            <dt>Início</dt>
+            <dd>{{ order.started_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          @if (order.completed_at) {
+            <dt>Conclusão</dt>
+            <dd>{{ order.completed_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          @if (order.delivered_at) {
+            <dt>Entrega</dt>
+            <dd>{{ order.delivered_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+          @if (order.canceled_at) {
+            <dt>Cancelamento</dt>
+            <dd>{{ order.canceled_at | date: 'dd/MM/yyyy HH:mm' }}</dd>
+          }
+        </dl>
+      </article>
+    </aside>
+  </div>
+
+  <app-status-dialog
+    [open]="statusDialogOpen()"
+    [current]="order.status"
+    [blocked]="blockedStatuses()"
+    [busy]="busy()"
+    (confirmed)="applyStatus($event)"
+    (closed)="statusDialogOpen.set(false)"
+  />
+
+  <app-budget-decision-dialog
+    [open]="decisionOpen()"
+    [mode]="decisionMode()"
+    [total]="order.total_cents"
+    [busy]="busy()"
+    (confirmed)="decide($event)"
+    (closed)="decisionOpen.set(false)"
+  />
+
+  <app-service-form-dialog [open]="newServiceOpen()" (saved)="onServiceCreated($event)" (closed)="newServiceOpen.set(false)" />
+}

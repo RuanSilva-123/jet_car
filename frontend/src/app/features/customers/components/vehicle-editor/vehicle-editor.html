@@ -1,0 +1,280 @@
+<article class="vehicle" [formGroup]="form()">
+  <header class="vehicle__header">
+    <span class="vehicle__icon"><app-icon [name]="typeIcon()" [size]="20" /></span>
+    <div class="vehicle__title">
+      <strong>{{ title() }}</strong>
+      <small>
+        @if (value()?.model_year) {
+          {{ value()?.model_year }}
+        }
+        @if (value()?.plate) {
+          <span class="plate">{{ value()?.plate | brFormat: 'plate' }}</span>
+        }
+      </small>
+    </div>
+    @if (customerId() && value()?.id) {
+      <div class="vehicle__links">
+        <a class="btn btn--ghost btn--sm" [routerLink]="['/vehicles', value()!.id, 'history']" title="Serviços já feitos neste veículo">
+          <app-icon name="clock" [size]="14" /> Histórico
+        </a>
+        <a
+          class="btn btn--primary btn--sm"
+          routerLink="/service-orders/new"
+          [queryParams]="{ customer: customerId(), vehicle: value()!.id }"
+          title="Abrir ordem de serviço para este veículo"
+        >
+          <app-icon name="plus" [size]="14" /> Nova OS
+        </a>
+      </div>
+    }
+    <button type="button" class="btn btn--icon is-danger" (click)="remove.emit()" title="Remover veículo" aria-label="Remover veículo">
+      <app-icon name="trash" [size]="16" />
+    </button>
+  </header>
+
+  <div class="vehicle__body">
+    <!-- Tipo + placa: a placa vem antes de marca/ano/modelo e pode preenchê-los -->
+    <div class="vehicle__top">
+      <div class="vehicle__type">
+        <span class="field__label">Tipo</span>
+        <div class="segmented" role="group" aria-label="Tipo de veículo">
+          @for (type of vehicleTypes; track type.value) {
+            <button type="button" [class.is-active]="value()?.type === type.value" (click)="setType(type.value)">
+              {{ type.label }}
+            </button>
+          }
+        </div>
+      </div>
+
+      <div class="field plate-field" [class.field--invalid]="errorFor('plate')">
+        <label [for]="listId() + '-plate'">Placa</label>
+        <div class="plate-field__row">
+          <div class="field__control">
+            <input
+              [id]="listId() + '-plate'"
+              formControlName="plate"
+              appMask="plate"
+              placeholder="ABC1D23"
+              maxlength="8"
+              (keydown.enter)="$event.preventDefault(); plateLookupEnabled() && lookupPlate()"
+            />
+            @if (plateStatus() === 'loading') {
+              <span class="spinner spinner--dark plate-field__spinner"></span>
+            } @else if (plateStatus() === 'found') {
+              <app-icon class="plate-field__ok" name="check" [size]="16" />
+            }
+          </div>
+          @if (plateLookupEnabled()) {
+            <button
+              type="button"
+              class="btn btn--ghost"
+              (click)="lookupPlate()"
+              [disabled]="plateStatus() === 'loading'"
+              title="Preencher marca, ano e modelo pela placa"
+            >
+              <app-icon name="search" [size]="16" /> Buscar pela placa
+            </button>
+          }
+        </div>
+        @if (errorFor('plate'); as error) {
+          <small class="field__error">{{ error }}</small>
+        } @else if (plateMessage(); as message) {
+          <small
+            class="plate-field__message"
+            [class.is-success]="plateStatus() === 'found'"
+            [class.is-warning]="plateStatus() !== 'found'"
+          >
+            {{ message }}
+          </small>
+        } @else if (plateLookupEnabled()) {
+          <small class="field__hint">Digite a placa para preencher os dados do veículo automaticamente.</small>
+        } @else if (isMaster()) {
+          <small class="field__hint">Preenchimento pela placa desativado: configure a APIBrasil no servidor.</small>
+        }
+      </div>
+    </div>
+
+    <!-- Identificação: FIPE ou manual -->
+    <div class="identity">
+      <div class="identity__head">
+        <span class="field__label">
+          @if (manual()) {
+            Marca, ano e modelo (preenchimento manual)
+          } @else {
+            Marca, ano e modelo <span class="hint">· Tabela FIPE</span>
+          }
+        </span>
+        <button type="button" class="link-button" (click)="toggleManual()">
+          {{ manual() ? 'Buscar na Tabela FIPE' : 'Não encontrou? Digitar manualmente' }}
+        </button>
+      </div>
+
+      @if (catalogError(); as message) {
+        <p class="notice"><app-icon name="alert" [size]="16" /> {{ message }}</p>
+      }
+
+      <!-- Ordem: marca → ano → modelo (a lista de modelos já vem filtrada pela marca e pelo ano) -->
+      <div class="grid grid--3">
+        @if (manual()) {
+          <div class="field" [class.field--invalid]="errorFor('brand')">
+            <label [for]="listId() + '-brand'">Marca</label>
+            <div class="field__control">
+              <input [id]="listId() + '-brand'" formControlName="brand" placeholder="Ex.: Chevrolet" />
+            </div>
+            @if (errorFor('brand'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('model_year')">
+            <label [for]="listId() + '-year'">Ano do modelo</label>
+            <div class="field__control">
+              <input [id]="listId() + '-year'" type="number" formControlName="model_year" placeholder="Ex.: 2020" min="1900" />
+            </div>
+            @if (errorFor('model_year'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('model')">
+            <label [for]="listId() + '-model'">Modelo / versão</label>
+            <div class="field__control">
+              <input [id]="listId() + '-model'" formControlName="model" placeholder="Ex.: Onix LT 1.0" />
+            </div>
+            @if (errorFor('model'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+        } @else {
+          <div class="field" [class.field--invalid]="errorFor('brand')">
+            <label [for]="listId() + '-brand'">Marca</label>
+            <app-combobox
+              [inputId]="listId() + '-brand'"
+              [options]="brands()"
+              [value]="value()?.fipe_brand_code ?? null"
+              [fallbackLabel]="value()?.brand ?? null"
+              [loading]="loading().brands"
+              [invalid]="!!errorFor('brand')"
+              placeholder="Buscar marca"
+              (selected)="selectBrand($event)"
+            />
+            @if (errorFor('brand'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+          <div class="field">
+            <label [for]="listId() + '-year'">Ano / combustível</label>
+            <app-combobox
+              [inputId]="listId() + '-year'"
+              [options]="yearOptions()"
+              [value]="value()?.fipe_year_code ?? null"
+              [fallbackLabel]="value()?.model_year ? '' + value()?.model_year : null"
+              [loading]="loading().years"
+              [disabled]="!value()?.fipe_brand_code"
+              [placeholder]="value()?.fipe_brand_code ? 'Selecionar ano' : 'Escolha a marca primeiro'"
+              (selected)="selectYear($event)"
+            />
+          </div>
+          <div class="field" [class.field--invalid]="errorFor('model')">
+            <label [for]="listId() + '-model'">Modelo / versão</label>
+            <app-combobox
+              [inputId]="listId() + '-model'"
+              [options]="models()"
+              [value]="value()?.fipe_model_code ?? null"
+              [fallbackLabel]="value()?.model ?? null"
+              [loading]="loading().models"
+              [disabled]="!value()?.fipe_year_code"
+              [invalid]="!!errorFor('model')"
+              [placeholder]="value()?.fipe_year_code ? 'Buscar modelo' : 'Escolha o ano primeiro'"
+              (selected)="selectModel($event)"
+            />
+            @if (errorFor('model'); as error) {
+              <small class="field__error">{{ error }}</small>
+            } @else if (value()?.fipe_year_code && !loading().models) {
+              <small class="field__hint">{{ models().length }} modelo(s) desta marca no ano escolhido.</small>
+            }
+          </div>
+        }
+      </div>
+    </div>
+
+    <!-- Detalhes -->
+    <div class="grid grid--4">
+      <div class="field">
+        <label [for]="listId() + '-color'">Cor</label>
+        <div class="field__control">
+          <input [id]="listId() + '-color'" formControlName="color" [attr.list]="listId() + '-colors'" placeholder="Ex.: Prata" />
+          <datalist [id]="listId() + '-colors'">
+            @for (color of colors; track color) {
+              <option [value]="color"></option>
+            }
+          </datalist>
+        </div>
+      </div>
+
+      <div class="field">
+        <label [for]="listId() + '-mileage'">Quilometragem</label>
+        <div class="field__control">
+          <input [id]="listId() + '-mileage'" formControlName="mileage" appMask="mileage" inputmode="numeric" placeholder="0" />
+          <span class="field__suffix">km</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label [for]="listId() + '-fuel'">Combustível</label>
+        <div class="field__control">
+          <select [id]="listId() + '-fuel'" formControlName="fuel">
+            <option [ngValue]="null">Não informado</option>
+            @for (fuel of fuelTypes; track fuel.value) {
+              <option [ngValue]="fuel.value">{{ fuel.label }}</option>
+            }
+          </select>
+        </div>
+      </div>
+
+      <div class="field" [class.field--invalid]="errorFor('manufacture_year')">
+        <label [for]="listId() + '-manufacture'">Ano de fabricação</label>
+        <div class="field__control">
+          @if (manufactureYears().length) {
+            <select [id]="listId() + '-manufacture'" formControlName="manufacture_year">
+              <option [ngValue]="null">Não informado</option>
+              @for (year of manufactureYears(); track year) {
+                <option [ngValue]="year">{{ year }}</option>
+              }
+            </select>
+          } @else {
+            <input [id]="listId() + '-manufacture'" placeholder="Informe o ano do modelo" disabled />
+          }
+        </div>
+        @if (errorFor('manufacture_year'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="field" [class.field--invalid]="errorFor('vin')">
+        <label [for]="listId() + '-vin'">Chassi</label>
+        <div class="field__control">
+          <input [id]="listId() + '-vin'" formControlName="vin" appMask="upper" maxlength="17" placeholder="17 caracteres" />
+        </div>
+        @if (errorFor('vin'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="field" [class.field--invalid]="errorFor('renavam')">
+        <label [for]="listId() + '-renavam'">Renavam</label>
+        <div class="field__control">
+          <input [id]="listId() + '-renavam'" formControlName="renavam" appMask="digits" inputmode="numeric" maxlength="11" placeholder="Somente números" />
+        </div>
+        @if (errorFor('renavam'); as error) {
+          <small class="field__error">{{ error }}</small>
+        }
+      </div>
+
+      <div class="field">
+        <label [for]="listId() + '-notes'">Observações do veículo</label>
+        <div class="field__control">
+          <input [id]="listId() + '-notes'" formControlName="notes" placeholder="Ex.: kit gás, rodas aro 17" />
+        </div>
+      </div>
+    </div>
+  </div>
+</article>

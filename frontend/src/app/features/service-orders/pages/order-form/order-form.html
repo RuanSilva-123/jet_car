@@ -1,0 +1,164 @@
+<section class="page-header">
+  <div>
+    @if (isEdit() && order(); as current) {
+      <a [routerLink]="['/service-orders', current.id]" class="back-link"><app-icon name="arrow-left" [size]="14" /> OS #{{ current.number }}</a>
+      <h1>Dados de entrada · OS #{{ current.number }}</h1>
+      <p>Atualize os dados de entrada do veículo.</p>
+    } @else {
+      <a routerLink="/service-orders" class="back-link"><app-icon name="arrow-left" [size]="14" /> Ordens de serviço</a>
+      <h1>Nova ordem de serviço</h1>
+      <p>Registre o veículo que chegou e o que o cliente relatou. Os serviços e o orçamento vêm depois.</p>
+    }
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else {
+  <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (formError(); as message) {
+      <div class="form-alert" role="alert"><app-icon name="alert" /> <span>{{ message }}</span></div>
+    }
+
+    <!-- Cliente e veículo -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Cliente e veículo</h2>
+        <p>De quem é o carro que entrou na oficina.</p>
+      </header>
+
+      <div class="form-section__fields">
+        @if (isEdit() && order(); as current) {
+          <div class="summary">
+            <span class="summary__icon"><app-icon name="user" /></span>
+            <div>
+              <strong>{{ current.customer?.name }}</strong>
+              <small>{{ current.vehicle?.brand }} {{ current.vehicle?.model }} · {{ current.vehicle?.plate | brFormat: 'plate' }}</small>
+            </div>
+          </div>
+        } @else {
+          <div class="field" [class.field--invalid]="errorFor('customer_id')">
+            <label for="order-customer">Cliente</label>
+            <app-combobox
+              inputId="order-customer"
+              [remote]="true"
+              [options]="customerOptions()"
+              [value]="selectedCustomer() ? '' + selectedCustomer()!.id : null"
+              [loading]="searchingCustomers() || loadingCustomer()"
+              [invalid]="!!errorFor('customer_id')"
+              placeholder="Buscar por nome, CPF/CNPJ, telefone ou placa"
+              emptyText="Nenhum cliente encontrado"
+              (queryChange)="onCustomerQuery($event)"
+              (selected)="selectCustomer($event)"
+            />
+            @if (errorFor('customer_id'); as error) {
+              <small class="field__error">{{ error }}</small>
+            } @else {
+              <small class="field__hint">Cliente novo? <a routerLink="/customers/new">Cadastre primeiro</a> e volte aqui.</small>
+            }
+          </div>
+
+          @if (selectedCustomer(); as customer) {
+            <div class="field" [class.field--invalid]="errorFor('vehicle_id')">
+              <span class="field__label">Veículo</span>
+              @if (customer.vehicles?.length) {
+                <div class="vehicles" role="radiogroup" aria-label="Veículo">
+                  @for (vehicle of customer.vehicles; track vehicle.id) {
+                    <button
+                      type="button"
+                      class="vehicle-option"
+                      role="radio"
+                      [attr.aria-checked]="selectedVehicleId() === vehicle.id"
+                      [class.is-selected]="selectedVehicleId() === vehicle.id"
+                      (click)="selectVehicle(vehicle.id)"
+                    >
+                      <app-icon [name]="vehicle.type === 'motorcycle' ? 'bike' : vehicle.type === 'truck' ? 'truck' : 'car'" [size]="20" />
+                      <span class="vehicle-option__text">
+                        <strong>{{ vehicle.brand }} {{ vehicle.model }}</strong>
+                        <small>
+                          {{ vehicle.model_year ?? 'Ano não informado' }}
+                          @if (vehicle.plate) {
+                            · <span class="plate">{{ vehicle.plate | brFormat: 'plate' }}</span>
+                          }
+                        </small>
+                      </span>
+                    </button>
+                  }
+                </div>
+              } @else {
+                <p class="notice">
+                  <app-icon name="alert" [size]="16" />
+                  Este cliente não tem veículos cadastrados.
+                  <a [routerLink]="['/customers', customer.id, 'edit']">Adicionar veículo</a>
+                </p>
+              }
+              @if (errorFor('vehicle_id'); as error) {
+                <small class="field__error">{{ error }}</small>
+              }
+            </div>
+          }
+        }
+      </div>
+    </section>
+
+    <!-- Entrada -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Entrada do veículo</h2>
+        <p>Quilometragem, o que o cliente relatou e quando o carro deve ficar pronto.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="form-grid">
+          <div class="field" [class.field--invalid]="errorFor('mileage')">
+            <label for="order-mileage">Km de entrada</label>
+            <div class="field__control">
+              <input id="order-mileage" formControlName="mileage" appMask="mileage" inputmode="numeric" placeholder="0" />
+              <span class="field__suffix">km</span>
+            </div>
+            @if (errorFor('mileage'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+
+          <div class="field" [class.field--invalid]="errorFor('expected_at')">
+            <label for="order-expected">Previsão de entrega <span class="optional">(opcional)</span></label>
+            <div class="field__control">
+              <input id="order-expected" type="date" formControlName="expected_at" [min]="isEdit() ? null : today" />
+            </div>
+            @if (errorFor('expected_at'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="order-complaint">Relato do cliente</label>
+          <div class="field__control field__control--textarea">
+            <textarea id="order-complaint" formControlName="complaint" rows="3" placeholder="O que o cliente disse ao deixar o carro. Ex.: barulho na suspensão dianteira ao passar em lombadas"></textarea>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="order-notes">Observações internas <span class="optional">(opcional)</span></label>
+          <div class="field__control field__control--textarea">
+            <textarea id="order-notes" formControlName="notes" rows="2" placeholder="Ex.: cliente vai deixar a chave reserva"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="form-footer">
+      <a [routerLink]="isEdit() && order() ? ['/service-orders', order()!.id] : ['/service-orders']" class="btn btn--ghost">Cancelar</a>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span> Salvando...
+        } @else {
+          <app-icon name="check" [size]="16" />
+          {{ isEdit() ? 'Salvar alterações' : 'Registrar entrada' }}
+        }
+      </button>
+    </footer>
+  </form>
+}
+

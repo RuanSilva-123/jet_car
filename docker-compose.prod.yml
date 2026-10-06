@@ -1,0 +1,91 @@
+# Ambiente de PRODUÇÃO (arquivo independente do de desenvolvimento)
+#   docker compose -f docker-compose.prod.yml up -d --build
+#   docker compose -f docker-compose.prod.yml exec app php artisan migrate --force
+#
+# O código e o Angular compilado ficam DENTRO das imagens (sem bind mounts).
+# As variáveis do Laravel vêm de backend/.env do servidor (APP_ENV=production, APP_DEBUG=false).
+
+name: jetcar-prod
+
+# Base comum de app, queue e scheduler (mesma imagem; só o app faz o build)
+x-php: &php
+  pull_policy: never
+  image: jetcar-php:prod
+  env_file:
+    - ./backend/.env
+  environment:
+    DB_CONNECTION: pgsql
+    DB_HOST: postgres
+    DB_PORT: 5432
+    DB_DATABASE: ${DB_DATABASE}
+    DB_USERNAME: ${DB_USERNAME}
+    DB_PASSWORD: ${DB_PASSWORD}
+    REDIS_HOST: redis
+  volumes:
+    - backend_storage:/var/www/html/storage
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  restart: always
+
+services:
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+      target: prod
+    image: jetcar-nginx:prod
+    ports:
+      - "${APP_PORT:-80}:80"
+    depends_on:
+      - app
+    restart: always
+
+  app:
+    <<: *php
+    build:
+      context: .
+      dockerfile: docker/php/Dockerfile
+      target: prod
+    command: sh -c "php artisan optimize && php-fpm"
+
+  queue:
+    <<: *php
+    command: php artisan queue:work --tries=3 --timeout=90 --max-time=3600
+
+  scheduler:
+    <<: *php
+    command: php artisan schedule:work
+
+  postgres:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: ${DB_DATABASE}
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: always
+
+  redis:
+    image: redis:8-alpine
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: always
+
+volumes:
+  backend_storage:
+  postgres_data:
+  redis_data:

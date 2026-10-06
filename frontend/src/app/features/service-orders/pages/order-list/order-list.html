@@ -1,0 +1,125 @@
+<section class="page-header">
+  <div>
+    <h1>Ordens de serviço</h1>
+    <p>Acompanhe os veículos na oficina e o andamento de cada serviço.</p>
+  </div>
+  <a routerLink="new" class="btn btn--primary">
+    <app-icon name="plus" />
+    Nova OS
+  </a>
+</section>
+
+<article class="card list">
+  <div class="toolbar">
+    <label class="search">
+      <app-icon name="search" />
+      <span class="sr-only">Buscar ordens de serviço</span>
+      <input
+        type="search"
+        placeholder="Buscar por nº da OS, cliente, placa ou modelo"
+        [value]="search()"
+        (input)="onSearch($any($event.target).value)"
+      />
+    </label>
+
+    <div class="segmented" role="group" aria-label="Filtrar por status">
+      @for (filter of statusFilters; track filter.value) {
+        <button
+          type="button"
+          [class.is-active]="status() === filter.value"
+          [attr.aria-pressed]="status() === filter.value"
+          (click)="onStatus(filter.value)"
+        >
+          {{ filter.label }}
+        </button>
+      }
+    </div>
+  </div>
+
+  <div class="list__body" [class.is-loading]="loading() && result()">
+    @if (loading() && !result()) {
+      <div class="list__state"><span class="spinner spinner--dark"></span></div>
+    } @else if (loadError()) {
+      <div class="empty-state">
+        <span class="empty-state__icon"><app-icon name="alert" /></span>
+        <strong>Não foi possível carregar as ordens de serviço</strong>
+        <p>Verifique sua conexão e tente novamente.</p>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="reload()">Tentar novamente</button>
+      </div>
+    } @else if (result(); as page) {
+      @if (page.data.length === 0) {
+        <div class="empty-state">
+          <span class="empty-state__icon"><app-icon [name]="hasSearch() ? 'search' : 'clipboard'" /></span>
+          @if (hasSearch()) {
+            <strong>Nenhuma OS encontrada</strong>
+            <p>Tente buscar pelo número da OS, nome do cliente ou placa.</p>
+          } @else if (status() === 'active') {
+            <strong>Nenhum veículo em serviço agora</strong>
+            <p>Quando um cliente deixar o carro, abra uma OS para acompanhar o serviço.</p>
+            <a routerLink="new" class="btn btn--primary btn--sm"><app-icon name="plus" [size]="16" /> Nova OS</a>
+          } @else {
+            <strong>Nenhuma OS com este status</strong>
+          }
+        </div>
+      } @else {
+        <div class="table-scroll">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>OS</th>
+                <th>Cliente</th>
+                <th>Veículo</th>
+                <th>Serviços</th>
+                <th>Status</th>
+                <th class="right">Total</th>
+                <th>Abertura</th>
+                <th>Previsão</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (order of page.data; track order.id) {
+                <tr class="is-clickable" (click)="open(order)">
+                  <td>
+                    <a class="number" [routerLink]="[order.id]" (click)="$event.stopPropagation()">#{{ order.number }}</a>
+                  </td>
+                  <td>
+                    <span class="strong">{{ order.customer?.name }}</span>
+                  </td>
+                  <td>
+                    <div class="vehicle">
+                      @if (order.vehicle?.plate) {
+                        <span class="plate">{{ order.vehicle?.plate | brFormat: 'plate' }}</span>
+                      }
+                      <span class="vehicle__model" [title]="order.vehicle?.brand + ' ' + order.vehicle?.model">{{ order.vehicle?.model }}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div class="progress" [title]="order.done_items_count + ' de ' + order.items_count + ' serviços feitos'">
+                      <div class="progress__bar"><span [style.width.%]="progress(order)"></span></div>
+                      <small>{{ order.done_items_count }}/{{ order.items_count }}</small>
+                    </div>
+                  </td>
+                  <td><app-status-badge [status]="order.status" /></td>
+                  <td class="right total" [class.muted]="!order.total_cents">{{ order.total_cents | money }}</td>
+                  <td class="muted">{{ order.created_at | date: 'dd/MM/yyyy' }}</td>
+                  <td [class.late]="isLate(order)" [class.muted]="!isLate(order)">
+                    @if (order.expected_at) {
+                      {{ order.expected_at + 'T12:00:00' | date: 'dd/MM/yyyy' }}
+                      @if (isLate(order)) {
+                        <small>atrasada</small>
+                      }
+                    } @else {
+                      —
+                    }
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <app-pagination [meta]="page.meta" (pageChange)="goToPage($event)" />
+      }
+    }
+  </div>
+</article>

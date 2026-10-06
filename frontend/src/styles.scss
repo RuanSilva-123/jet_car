@@ -1,0 +1,216 @@
+// Estilos globais e design tokens do painel
+
+@use './styles/forms';
+@use './styles/components';
+
+:root {
+  // Identidade JetCar: vermelho, preto e branco
+  --color-brand: #d90429;
+  --color-brand-hover: #b00321;
+  --color-brand-soft: #fdecef;
+  --color-ink: #080808;
+
+  --color-primary: var(--color-brand);
+  --color-primary-hover: var(--color-brand-hover);
+  --color-primary-soft: var(--color-brand-soft);
+  --color-focus-ring: rgb(217 4 41 / 0.18);
+
+  // Neutros sem tom azulado, para combinar com o preto da marca
+  --color-bg: #f4f4f5;
+  --color-surface: #ffffff;
+  --color-border: #e4e4e7;
+  --color-text: #111111;
+  --color-text-muted: #71717a;
+  --color-placeholder: #a1a1aa;
+  --color-hover: #fafafa;
+
+  --color-sidebar: var(--color-ink);
+  --color-sidebar-text: #a1a1aa;
+  --color-sidebar-muted: #52525b;
+  --color-sidebar-hover: rgb(255 255 255 / 0.06);
+  --color-sidebar-active: #ffffff;
+
+  --color-success: #16a34a;
+  --color-success-soft: #ecfdf3;
+  // Erro um pouco mais escuro que o vermelho da marca, para não se confundir com ele
+  --color-danger: #b91c1c;
+  --color-danger-soft: #fef2f2;
+  --color-warning: #d97706;
+  --color-warning-soft: #fffbeb;
+  --color-neutral-soft: #f0f0f1;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  --shadow-sm: 0 1px 2px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 16px rgb(0 0 0 / 0.08);
+  --shadow-brand: 0 4px 14px rgb(217 4 41 / 0.35);
+
+  --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  // Mesma família do subtítulo do logo
+  --font-display: 'Montserrat', 'Segoe UI', 'Helvetica Neue', sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--color-text);
+  background: var(--color-bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin: 0;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  font-weight: 700;
+}
+
+a {
+  color: var(--color-primary);
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+// Botão primário reutilizado em todo o painel
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 42px;
+  padding: 0 18px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  &--primary {
+    background: var(--color-primary);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: var(--color-primary-hover);
+    }
+  }
+
+  &--ghost {
+    background: transparent;
+    color: var(--color-text-muted);
+    border-color: var(--color-border);
+
+    &:hover:not(:disabled) {
+      color: var(--color-text);
+      background: var(--color-bg);
+    }
+  }
+
+  &--danger {
+    background: var(--color-danger);
+    color: #fff;
+
+    &:hover:not(:disabled) {
+      background: #991b1b;
+    }
+  }
+
+  &--block {
+    width: 100%;
+  }
+
+  &--sm {
+    height: 36px;
+    padding: 0 12px;
+    font-size: 13px;
+  }
+
+  // Botão só com ícone (ações de tabela)
+  &--icon {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+    border-color: transparent;
+    background: transparent;
+    color: var(--color-text-muted);
+
+    &:hover:not(:disabled) {
+      background: var(--color-bg);
+      color: var(--color-text);
+    }
+
+    &.is-danger:hover:not(:disabled) {
+      background: var(--color-danger-soft);
+      color: var(--color-danger);
+    }
+  }
+}
+
+.spinner {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgb(255 255 255 / 0.4);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+
+  // Sobre fundo claro
+  &--dark {
+    border-color: var(--color-border);
+    border-top-color: var(--color-primary);
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}

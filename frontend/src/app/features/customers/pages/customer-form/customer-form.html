@@ -1,0 +1,309 @@
+<section class="page-header">
+  <div>
+    <a routerLink="/customers" class="back-link"><app-icon name="arrow-left" [size]="14" /> Clientes</a>
+    <h1>{{ isEdit() ? 'Editar cliente' : 'Novo cliente' }}</h1>
+    <p>
+      {{ isEdit() ? 'Atualize os dados do cliente e dos veículos.' : 'Cadastre o cliente e os veículos dele em um só lugar.' }}
+    </p>
+  </div>
+</section>
+
+@if (loading()) {
+  <div class="card loading-card"><span class="spinner spinner--dark"></span></div>
+} @else {
+  <form class="card" [formGroup]="form" (ngSubmit)="submit()" novalidate>
+    @if (formError(); as message) {
+      <div class="form-alert" role="alert">
+        <app-icon name="alert" />
+        <span>{{ message }}</span>
+      </div>
+    }
+
+    <!-- Tipo e identificação -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Identificação</h2>
+        <p>Pessoa física ou jurídica. CPF/CNPJ é opcional, mas evita cadastros duplicados.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="choices choices--compact" role="radiogroup" aria-label="Tipo de cliente">
+          <label class="choice">
+            <input type="radio" [checked]="!isCompany()" (change)="setPersonType('individual')" name="person_type" />
+            <app-icon name="user" />
+            <span class="choice__text">
+              <strong>Pessoa física</strong>
+              <small>CPF</small>
+            </span>
+          </label>
+          <label class="choice">
+            <input type="radio" [checked]="isCompany()" (change)="setPersonType('company')" name="person_type" />
+            <app-icon name="building" />
+            <span class="choice__text">
+              <strong>Pessoa jurídica</strong>
+              <small>CNPJ · empresas e frotas</small>
+            </span>
+          </label>
+        </div>
+
+        <div class="form-grid">
+          <div class="field" [class.field--invalid]="errorFor('name')">
+            <label for="name">{{ isCompany() ? 'Razão social' : 'Nome completo' }}</label>
+            <div class="field__control">
+              <input id="name" formControlName="name" [placeholder]="isCompany() ? 'Ex.: Transportes Silva LTDA' : 'Ex.: Maria da Silva'" />
+            </div>
+            @if (errorFor('name'); as error) {
+              <small class="field__error">{{ error }}</small>
+            }
+          </div>
+
+          @if (isCompany()) {
+            <div class="field" [class.field--invalid]="errorFor('trade_name')">
+              <label for="trade_name">Nome fantasia <span class="optional">(opcional)</span></label>
+              <div class="field__control">
+                <input id="trade_name" formControlName="trade_name" placeholder="Como a empresa é conhecida" />
+              </div>
+            </div>
+          }
+
+          <div class="field" [class.field--invalid]="errorFor('document')">
+            <label for="document">{{ isCompany() ? 'CNPJ' : 'CPF' }} <span class="optional">(opcional)</span></label>
+            <div class="field__control">
+              @if (isCompany()) {
+                <input id="document" formControlName="document" appMask="cnpj" placeholder="00.000.000/0000-00" />
+              } @else {
+                <input id="document" formControlName="document" appMask="cpf" inputmode="numeric" placeholder="000.000.000-00" />
+              }
+            </div>
+            @if (errorFor('document'); as error) {
+              <small class="field__error">{{ error }}</small>
+            } @else if (isCompany()) {
+              <small class="field__hint">Aceita também o novo CNPJ alfanumérico.</small>
+            }
+          </div>
+
+          @if (isCompany()) {
+            <div class="field">
+              <label for="state_registration">Inscrição estadual <span class="optional">(opcional)</span></label>
+              <div class="field__control">
+                <input id="state_registration" formControlName="state_registration" placeholder="Ou ISENTO" />
+              </div>
+            </div>
+          } @else {
+            <div class="field" [class.field--invalid]="errorFor('birth_date')">
+              <label for="birth_date">Data de nascimento <span class="optional">(opcional)</span></label>
+              <div class="field__control">
+                <input id="birth_date" type="date" formControlName="birth_date" [max]="today" min="1900-01-01" />
+              </div>
+              @if (errorFor('birth_date'); as error) {
+                <small class="field__error">{{ error }}</small>
+              }
+            </div>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Contato -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Contato</h2>
+        <p>Telefone principal para avisos sobre o serviço. Marque se ele também é WhatsApp.</p>
+      </header>
+
+      <div class="form-section__fields form-grid">
+        <div class="field" [class.field--invalid]="errorFor('phone')">
+          <label for="phone">Telefone principal</label>
+          <div class="field__control">
+            <app-icon name="phone" />
+            <input id="phone" type="tel" formControlName="phone" appMask="phone" placeholder="(00) 00000-0000" />
+          </div>
+          @if (errorFor('phone'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+          <label class="checkbox checkbox--sm">
+            <input type="checkbox" formControlName="phone_is_whatsapp" />
+            <span>Este número é WhatsApp</span>
+          </label>
+        </div>
+
+        <div class="field" [class.field--invalid]="errorFor('secondary_phone')">
+          <label for="secondary_phone">Telefone secundário <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="phone" />
+            <input id="secondary_phone" type="tel" formControlName="secondary_phone" appMask="phone" placeholder="(00) 0000-0000" />
+          </div>
+          @if (errorFor('secondary_phone'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+
+        <div class="field" [class.field--invalid]="errorFor('email')">
+          <label for="email">E-mail <span class="optional">(opcional)</span></label>
+          <div class="field__control">
+            <app-icon name="mail" />
+            <input id="email" type="email" formControlName="email" placeholder="cliente@email.com" />
+          </div>
+          @if (errorFor('email'); as error) {
+            <small class="field__error">{{ error }}</small>
+          }
+        </div>
+      </div>
+    </section>
+
+    <!-- Endereço -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Endereço</h2>
+        <p>Digite o CEP e o endereço é preenchido automaticamente.</p>
+      </header>
+
+      <div class="form-section__fields address">
+        <div class="field field--cep" [class.field--invalid]="errorFor('zip_code')">
+          <label for="zip_code">CEP</label>
+          <div class="field__control">
+            <app-icon name="map-pin" />
+            <input id="zip_code" formControlName="zip_code" appMask="cep" inputmode="numeric" placeholder="00000-000" />
+            @if (cepStatus() === 'loading') {
+              <span class="spinner spinner--dark cep-spinner"></span>
+            } @else if (cepStatus() === 'found') {
+              <app-icon class="cep-ok" name="check" [size]="16" />
+            }
+          </div>
+          @if (errorFor('zip_code'); as error) {
+            <small class="field__error">{{ error }}</small>
+          } @else if (cepStatus() === 'not-found') {
+            <small class="field__error">CEP não encontrado. Preencha o endereço manualmente.</small>
+          } @else if (cepStatus() === 'error') {
+            <small class="field__hint">Busca de CEP indisponível. Preencha manualmente.</small>
+          }
+        </div>
+
+        <div class="field field--street">
+          <label for="street">Logradouro</label>
+          <div class="field__control">
+            <input id="street" formControlName="street" placeholder="Rua, avenida..." />
+          </div>
+        </div>
+
+        <div class="field field--number">
+          <label for="number">Número</label>
+          <div class="field__control">
+            <input id="number" formControlName="number" placeholder="Nº ou S/N" />
+          </div>
+        </div>
+
+        <div class="field field--complement">
+          <label for="complement">Complemento</label>
+          <div class="field__control">
+            <input id="complement" formControlName="complement" placeholder="Apto, bloco, sala..." />
+          </div>
+        </div>
+
+        <div class="field field--neighborhood">
+          <label for="neighborhood">Bairro</label>
+          <div class="field__control">
+            <input id="neighborhood" formControlName="neighborhood" />
+          </div>
+        </div>
+
+        <div class="field field--city">
+          <label for="city">Cidade</label>
+          <div class="field__control">
+            <input id="city" formControlName="city" />
+          </div>
+        </div>
+
+        <div class="field field--state" [class.field--invalid]="errorFor('state')">
+          <label for="state">UF</label>
+          <div class="field__control">
+            <select id="state" formControlName="state">
+              <option value="">—</option>
+              @for (uf of states; track uf) {
+                <option [value]="uf">{{ uf }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Veículos -->
+    <section class="form-section form-section--stacked">
+      <header class="form-section__intro form-section__intro--row">
+        <div>
+          <h2>Veículos <span class="count">{{ vehicles.length }}</span></h2>
+          <p>Marca, modelo e ano pela Tabela FIPE. Um cliente pode ter vários veículos.</p>
+        </div>
+        <button type="button" class="btn btn--ghost btn--sm" (click)="addVehicle()">
+          <app-icon name="plus" [size]="16" /> Adicionar veículo
+        </button>
+      </header>
+
+      <div class="vehicles">
+        @for (vehicle of vehicles.controls; track vehicle; let index = $index) {
+          <app-vehicle-editor
+            [form]="vehicle"
+            [index]="index"
+            [submitted]="submitted()"
+            [customerId]="loadedCustomer()?.id ?? null"
+            (remove)="removeVehicle(index)"
+          />
+        } @empty {
+          <button type="button" class="vehicles__empty" (click)="addVehicle()">
+            <app-icon name="car" [size]="22" />
+            <strong>Nenhum veículo</strong>
+            <span>Clique para adicionar o primeiro veículo deste cliente.</span>
+          </button>
+        }
+      </div>
+    </section>
+
+    <!-- Observações -->
+    <section class="form-section">
+      <header class="form-section__intro">
+        <h2>Observações</h2>
+        <p>Preferências, histórico ou qualquer informação útil para a equipe.</p>
+      </header>
+
+      <div class="form-section__fields">
+        <div class="field">
+          <label for="notes" class="sr-only">Observações</label>
+          <div class="field__control field__control--textarea">
+            <textarea id="notes" formControlName="notes" rows="3" placeholder="Ex.: prefere contato por WhatsApp à tarde"></textarea>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <footer class="form-footer">
+      @if (isEdit() && canDelete()) {
+        <button type="button" class="btn btn--ghost danger-link" (click)="confirmDelete.set(true)">
+          <app-icon name="trash" [size]="16" /> Excluir cliente
+        </button>
+      }
+      <span class="form-footer__spacer"></span>
+      <a routerLink="/customers" class="btn btn--ghost">Cancelar</a>
+      <button type="submit" class="btn btn--primary" [disabled]="saving()">
+        @if (saving()) {
+          <span class="spinner"></span> Salvando...
+        } @else {
+          <app-icon name="check" [size]="16" />
+          {{ isEdit() ? 'Salvar alterações' : 'Cadastrar cliente' }}
+        }
+      </button>
+    </footer>
+  </form>
+}
+
+<app-confirm-dialog
+  [open]="confirmDelete()"
+  title="Excluir cliente?"
+  [message]="'O cadastro de ' + (loadedCustomer()?.name ?? '') + ' e os veículos dele serão removidos da listagem.'"
+  confirmLabel="Excluir"
+  icon="trash"
+  tone="danger"
+  [busy]="deleting()"
+  (confirmed)="deleteCustomer()"
+  (cancelled)="confirmDelete.set(false)"
+/>
