@@ -1,10 +1,11 @@
 import { DatePipe } from '@angular/common';
-import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, DestroyRef, inject, input, OnInit, signal } from '@angular/core';
 import { takeUntilDestroyed, toObservable } from '@angular/core/rxjs-interop';
 import { RouterLink } from '@angular/router';
 import { catchError, debounceTime, distinctUntilChanged, map, of, switchMap, tap } from 'rxjs';
 
 import { Icon } from '../../../../shared/components/icon/icon';
+import { IncomeTab } from '../../components/income-tab/income-tab';
 import { Pagination } from '../../../../shared/components/pagination/pagination';
 import { BrFormatPipe } from '../../../../shared/pipes/br-format.pipe';
 import { MoneyPipe } from '../../../../shared/pipes/money.pipe';
@@ -19,16 +20,18 @@ import { FinanceService, PaymentsPage, ReceivablesPage, ReceivableScope } from '
  */
 @Component({
   selector: 'app-finance',
-  imports: [RouterLink, DatePipe, Icon, Pagination, BrFormatPipe, MoneyPipe, StatusBadge],
+  imports: [RouterLink, DatePipe, Icon, Pagination, BrFormatPipe, MoneyPipe, StatusBadge, IncomeTab],
   templateUrl: './finance.html',
   styleUrls: ['../../../services/pages/service-list/service-list.scss', './finance.scss'],
   changeDetection: ChangeDetectionStrategy.OnPush,
 })
-export class FinancePage {
+export class FinancePage implements OnInit {
   private readonly finance = inject(FinanceService);
   private readonly destroyRef = inject(DestroyRef);
 
-  protected readonly tab = signal<'receivables' | 'payments'>('receivables');
+  /** ?tab=incomes (link do fluxo de caixa). */
+  readonly tabParam = input<string | undefined>(undefined, { alias: 'tab' });
+  protected readonly tab = signal<'receivables' | 'payments' | 'incomes'>('receivables');
   protected readonly methods = PAYMENT_METHODS;
 
   // A receber
@@ -55,6 +58,10 @@ export class FinancePage {
 
   private readonly receivablesQuery = computed(() => ({ search: this.search().trim(), scope: this.scope(), page: this.receivablesPage() }));
   private readonly paymentsQuery = computed(() => ({ from: this.from(), to: this.to(), method: this.method(), page: this.paymentsPage() }));
+
+  ngOnInit(): void {
+    if (this.tabParam() === 'incomes') this.tab.set('incomes');
+  }
 
   constructor() {
     toObservable(this.receivablesQuery)

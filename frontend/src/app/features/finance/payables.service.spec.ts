@@ -71,6 +71,22 @@ describe('PayablesService', () => {
     expect(http.expectOne('/api/v1/recurring-bills/2').request.method).toBe('PUT');
   });
 
+  it('lança, recebe e estorna outras entradas', () => {
+    api.incomes({ status: 'pending', search: '', page: 1 }).subscribe();
+    expect(http.expectOne((r) => r.url === '/api/v1/incomes').request.params.get('status')).toBe('pending');
+
+    api
+      .saveIncome(null, { description: 'Prêmio', category: 'other', amount_cents: 500000, expected_on: null, notes: '', received_at: '2026-10-06', payment_method: 'pix' })
+      .subscribe();
+    expect(http.expectOne('/api/v1/incomes').request.method).toBe('POST');
+
+    api.receiveIncome(3, { received_at: '2026-10-06', payment_method: 'cash', amount_cents: null }).subscribe();
+    expect(http.expectOne('/api/v1/incomes/3/receive').request.body).toEqual({ received_at: '2026-10-06', payment_method: 'cash', amount_cents: null });
+
+    api.unreceiveIncome(3).subscribe();
+    expect(http.expectOne('/api/v1/incomes/3/unreceive').request.method).toBe('POST');
+  });
+
   it('busca o fluxo de caixa do mês e monta o link do CSV', () => {
     api.cashFlow('2026-10').subscribe();
     expect(http.expectOne((r) => r.url === '/api/v1/cash-flow').request.params.get('month')).toBe('2026-10');

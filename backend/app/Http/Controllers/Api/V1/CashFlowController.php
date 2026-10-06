@@ -32,11 +32,12 @@ class CashFlowController extends Controller
                 $out = fopen('php://output', 'w');
                 fwrite($out, "\xEF\xBB\xBF");
                 $money = fn (int $cents) => number_format($cents / 100, 2, ',', '');
-                fputcsv($out, ['Data', 'Entradas', 'Saídas', 'Saídas previstas', 'Saldo', 'Situação'], ';', '"', '');
+                fputcsv($out, ['Data', 'Entradas', 'Entradas previstas', 'Saídas', 'Saídas previstas', 'Saldo', 'Situação'], ';', '"', '');
                 foreach ($result['days'] as $day) {
                     fputcsv($out, [
                         Carbon::parse($day['date'])->format('d/m/Y'),
                         $money($day['in_cents']),
+                        $money($day['planned_in_cents']),
                         $money($day['out_cents']),
                         $money($day['planned_out_cents']),
                         $money($day['balance_cents']),

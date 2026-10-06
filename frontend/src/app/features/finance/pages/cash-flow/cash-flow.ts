@@ -55,6 +55,7 @@ export class CashFlowPage implements OnInit {
       const date = new Date(`${day.date}T12:00:00`);
       const moves = [
         day.in_cents ? `entrou ${formatMoney(day.in_cents)}` : '',
+        day.planned_in_cents ? `a entrar ${formatMoney(day.planned_in_cents)}` : '',
         day.out_cents ? `saiu ${formatMoney(day.out_cents)}` : '',
         day.planned_out_cents ? `a pagar ${formatMoney(day.planned_out_cents)}` : '',
       ].filter(Boolean);
@@ -71,7 +72,7 @@ export class CashFlowPage implements OnInit {
 
   protected readonly rows = computed(() => {
     const days = this.data()?.days ?? [];
-    return this.allDays() ? days : days.filter((day) => day.in_cents || day.out_cents || day.planned_out_cents);
+    return this.allDays() ? days : days.filter((day) => day.in_cents || day.planned_in_cents || day.out_cents || day.planned_out_cents);
   });
 
   /** Barras das categorias proporcionais à maior. */

@@ -8,6 +8,7 @@
       <button type="button" class="btn btn--ghost" (click)="openingOpen.set(true)"><app-icon name="wallet" [size]="16" /> Saldo inicial</button>
     }
     <a class="btn btn--ghost" [href]="csvUrl()" download><app-icon name="download" [size]="16" /> CSV</a>
+    <a class="btn btn--ghost" routerLink="/finance" [queryParams]="{ tab: 'incomes' }"><app-icon name="plus" [size]="16" /> Outra entrada</a>
     <a class="btn btn--primary" routerLink="/finance/bills"><app-icon name="receipt" [size]="16" /> Contas a pagar</a>
   </div>
 </section>
@@ -53,7 +54,11 @@
     <div class="tile">
       <span class="tile__label">Entradas</span>
       <strong class="tile__value is-in">{{ flow.summary.received_cents | money }}</strong>
-      <small>Pagamentos das OS no mês</small>
+      @if (flow.summary.received_other_cents > 0) {
+        <small>OS {{ flow.summary.received_orders_cents | money }} · outras {{ flow.summary.received_other_cents | money }}</small>
+      } @else {
+        <small>Pagamentos das OS no mês</small>
+      }
     </div>
     <div class="tile">
       <span class="tile__label">Saídas</span>
@@ -72,9 +77,12 @@
     <div class="tile tile--highlight">
       <span class="tile__label">Previsão para o fim do mês</span>
       <strong class="tile__value" [class.is-alert]="flow.summary.projected_end_cents < 0">{{ flow.summary.projected_end_cents | money }}</strong>
+      @if (flow.summary.to_receive_other_cents > 0) {
+        <small>Conta {{ flow.summary.to_receive_other_cents | money }} de outras entradas previstas</small>
+      }
       @if (flow.summary.receivable_cents > 0) {
         <small>{{ flow.summary.projected_with_receivables_cents | money }} recebendo as OS em aberto ({{ flow.summary.receivable_cents | money }})</small>
-      } @else {
+      } @else if (!flow.summary.to_receive_other_cents) {
         <small>Pagando todas as contas do mês</small>
       }
     </div>
@@ -139,7 +147,17 @@
                       <small class="tag">previsto</small>
                     }
                   </td>
-                  <td class="right in">{{ day.in_cents ? (day.in_cents | money) : '—' }}</td>
+                  <td class="right in">
+                    @if (day.in_cents) {
+                      {{ day.in_cents | money }}
+                    }
+                    @if (day.planned_in_cents) {
+                      <small class="planned-in">{{ day.planned_in_cents | money }} a entrar</small>
+                    }
+                    @if (!day.in_cents && !day.planned_in_cents) {
+                      —
+                    }
+                  </td>
                   <td class="right">
                     @if (day.out_cents) {
                       {{ day.out_cents | money }}

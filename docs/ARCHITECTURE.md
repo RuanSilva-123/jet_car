@@ -291,7 +291,8 @@ Sem integração com banco: o painel gera um **Pix estático com valor** a parti
 | `GET/PUT /api/v1/settings/finance` | saldo inicial do caixa numa data (`PUT` só master) |
 
 - **Despesas fixas:** `php artisan jetcar:recurring-bills` roda todo dia às 5h30 no `scheduler` e lança a conta do mês de cada despesa ativa; a chave única (`recurring_bill_id`, `due_date`) impede duplicar. Cadastrar ou editar uma despesa já lança a do mês.
-- **Saldo:** saldo inicial + pagamentos das OS − contas pagas desde a data do saldo inicial. A previsão do mês desconta as contas em aberto (as vencidas entram como "hoje") e mostra também o valor recebendo as OS com saldo.
+- **Saldo:** saldo inicial + pagamentos das OS + outras entradas recebidas − contas pagas desde a data do saldo inicial. A previsão do mês desconta as contas em aberto (as vencidas entram como "hoje") e mostra também o valor recebendo as OS com saldo.
+- **Outras entradas** (`/finance`, aba "Outras entradas"): dinheiro que não vem de OS — aporte do dono, empréstimo, venda de um bem, prêmio. `GET/POST/PUT/DELETE /api/v1/incomes` (`status` = `pending`, `received`, `all`), `POST …/{id}/receive` (data, forma e valor que entrou) e `POST …/{id}/unreceive` (**só master**). Já recebida entra no saldo no dia; prevista (`expected_on`) entra na previsão do mês (atrasada conta "hoje"). Excluir uma recebida é só para o master.
 - **Compra de peças:** a entrada no estoque pode lançar a conta a pagar (quantidade × custo, com fornecedor, vencimento e parcelas) na mesma transação.
 - Todas as telas exigem o perfil financeiro (todos menos o mecânico).
 
@@ -335,7 +336,9 @@ Sem integração com banco: o painel gera um **Pix estático com valor** a parti
 | `GET /api/v1/appointments?from&to` | agendamentos do período (até 62 dias), datas ISO 8601 com fuso |
 | `POST /api/v1/appointments` · `PUT …/{id}` | cliente, veículo (opcional), horário, duração, motivo; `service_reminder_id` marca o lembrete como agendado |
 | `POST …/{id}/status` | `scheduled`, `confirmed`, `no_show`, `canceled` |
-| `POST …/{id}/check-in` | o carro chegou: abre a OS com o motivo como relato (pede o veículo se não estava definido) |
+| `POST …/{id}/check-in` | o carro chegou: abre a OS com o motivo como relato (pede o veículo se não estava definido; aceita `vehicle` para cadastrar um carro novo) |
+
+- **Sem cadastro:** o agendamento aceita `contact_name` (+ `contact_phone` e `vehicle_description`) no lugar de `customer_id`. No check-in, quem não tem cadastro vira cliente: `customer` (nome e telefone, cadastro rápido) ou `customer_id` (cliente que já existia), com `vehicle_id` ou `vehicle` (tipo, marca, modelo, placa).
 
 - O banco guarda em UTC; o painel mostra no horário do navegador. Textos gerados pelo servidor usam `DISPLAY_TIMEZONE` (padrão `America/Sao_Paulo`).
 

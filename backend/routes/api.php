@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\CashFlowController;
 use App\Http\Controllers\Api\V1\CustomerController;
 use App\Http\Controllers\Api\V1\DashboardController;
 use App\Http\Controllers\Api\V1\FinanceController;
+use App\Http\Controllers\Api\V1\IncomeController;
 use App\Http\Controllers\Api\V1\LaborServiceController;
 use App\Http\Controllers\Api\V1\MechanicController;
 use App\Http\Controllers\Api\V1\PartController;
@@ -130,6 +131,10 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('bills/{bill}/unpay', [BillController::class, 'unpay'])->name('bills.unpay');
         Route::apiResource('bills', BillController::class)->except('show');
         Route::apiResource('recurring-bills', RecurringBillController::class)->except('show');
+        // Outras entradas do caixa (não vêm de OS)
+        Route::post('incomes/{income}/receive', [IncomeController::class, 'receive'])->name('incomes.receive');
+        Route::post('incomes/{income}/unreceive', [IncomeController::class, 'unreceive'])->name('incomes.unreceive');
+        Route::apiResource('incomes', IncomeController::class)->except('show');
         Route::get('cash-flow', [CashFlowController::class, 'show'])->name('cash-flow.show');
         Route::get('settings/finance', [CashFlowController::class, 'settings'])->name('settings.finance.show');
         Route::put('settings/finance', [CashFlowController::class, 'updateSettings'])->name('settings.finance.update');

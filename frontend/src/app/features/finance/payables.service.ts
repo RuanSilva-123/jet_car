@@ -130,9 +130,61 @@ export type SupplierPayload = Pick<Supplier, 'name'> & {
   notes: string;
 };
 
+export type IncomeCategory = 'owner_contribution' | 'loan' | 'asset_sale' | 'refund' | 'investment' | 'other';
+
+/** Mesmos rótulos do backend (App\Enums\IncomeCategory). */
+export const INCOME_CATEGORIES: { value: IncomeCategory; label: string }[] = [
+  { value: 'owner_contribution', label: 'Aporte do dono' },
+  { value: 'loan', label: 'Empréstimo / financiamento' },
+  { value: 'asset_sale', label: 'Venda de bens / sucata' },
+  { value: 'refund', label: 'Reembolso / devolução' },
+  { value: 'investment', label: 'Rendimentos' },
+  { value: 'other', label: 'Outras entradas' },
+];
+
+/** Entrada do caixa que não vem de OS (prevista ou já recebida). */
+export interface Income {
+  id: number;
+  description: string;
+  category: IncomeCategory;
+  category_label: string;
+  amount_cents: number;
+  expected_on: string;
+  received_at: string | null;
+  payment_method: PaymentMethod | null;
+  payment_method_label: string | null;
+  received_by: string | null;
+  /** Prevista para antes de hoje e ainda não entrou. */
+  is_late: boolean;
+  notes: string | null;
+}
+
+export type IncomeStatus = 'pending' | 'received' | 'all';
+
+export interface IncomeList extends Paginated<Income> {
+  summary: {
+    pending: { count: number; cents: number };
+    late: { count: number; cents: number };
+    received_this_month: number;
+  };
+}
+
+export interface IncomePayload {
+  description: string;
+  category: IncomeCategory;
+  amount_cents: number;
+  expected_on: string | null;
+  notes: string;
+  /** Só no cadastro: já entrou. */
+  received_at?: string | null;
+  payment_method?: PaymentMethod | null;
+}
+
 export interface CashFlowDay {
   date: string;
   in_cents: number;
+  /** Outras entradas previstas para o dia (as atrasadas contam hoje). */
+  planned_in_cents: number;
   out_cents: number;
   planned_out_cents: number;
   balance_cents: number;
@@ -151,7 +203,12 @@ export interface CashFlowMonth {
   days: CashFlowDay[];
   by_category: { category: ExpenseCategory; label: string; paid_cents: number; open_cents: number }[];
   summary: {
+    /** Tudo que entrou: OS + outras entradas. */
     received_cents: number;
+    received_orders_cents: number;
+    received_other_cents: number;
+    to_receive_other_cents: number;
+    to_receive_other_count: number;
     paid_cents: number;
     net_cents: number;
     current_balance_cents: number;
@@ -236,6 +293,33 @@ export class PayablesService {
 
   deleteSupplier(id: number): Observable<void> {
     return this.http.delete<void>(`${API_URL}/suppliers/${id}`);
+  }
+
+  // --- outras entradas --------------------------------------------------------------
+
+  incomes(query: { status: IncomeStatus; search: string; page: number }): Observable<IncomeList> {
+    let params = new HttpParams().set('page', query.page).set('status', query.status).set('per_page', 20);
+    if (query.search) params = params.set('search', query.search);
+    return this.http.get<IncomeList>(`${API_URL}/incomes`, { params });
+  }
+
+  saveIncome(id: number | null, payload: IncomePayload): Observable<Income> {
+    const request = id
+      ? this.http.put<ApiResource<Income>>(`${API_URL}/incomes/${id}`, payload)
+      : this.http.post<ApiResource<Income>>(`${API_URL}/incomes`, payload);
+    return request.pipe(map(({ data }) => data));
+  }
+
+  receiveIncome(id: number, payment: { received_at: string; payment_method: PaymentMethod; amount_cents: number | null }): Observable<Income> {
+    return this.http.post<ApiResource<Income>>(`${API_URL}/incomes/${id}/receive`, payment).pipe(map(({ data }) => data));
+  }
+
+  unreceiveIncome(id: number): Observable<Income> {
+    return this.http.post<ApiResource<Income>>(`${API_URL}/incomes/${id}/unreceive`, {}).pipe(map(({ data }) => data));
+  }
+
+  deleteIncome(id: number): Observable<void> {
+    return this.http.delete<void>(`${API_URL}/incomes/${id}`);
   }
 
   // --- fluxo de caixa ---------------------------------------------------------------

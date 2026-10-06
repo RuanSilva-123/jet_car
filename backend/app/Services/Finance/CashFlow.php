@@ -4,6 +4,7 @@ namespace App\Services\Finance;
 
 use App\Enums\ServiceOrderStatus;
 use App\Models\Bill;
+use App\Models\Income;
 use App\Models\ServiceOrder;
 use App\Models\ServiceOrderPayment;
 use App\Support\FinanceSettings;
@@ -12,9 +13,10 @@ use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
- * Fluxo de caixa do mês: entradas (recebimentos das OS) e saídas (contas pagas) dia a dia,
- * com o saldo acumulado. Do dia de hoje em diante, as contas em aberto entram como saída
- * prevista (as vencidas contam hoje) e o saldo vira projeção.
+ * Fluxo de caixa do mês: entradas (recebimentos das OS e outras entradas) e saídas (contas
+ * pagas) dia a dia, com o saldo acumulado. Do dia de hoje em diante, as contas em aberto entram
+ * como saída prevista e as outras entradas pendentes como entrada prevista (atrasadas contam
+ * hoje), e o saldo vira projeção.
  *
  * Saldo = saldo inicial informado + tudo que entrou − tudo que saiu desde a data dele.
  */
@@ -38,6 +40,19 @@ class CashFlow
             ->groupBy(fn (ServiceOrderPayment $payment) => $payment->paid_at->toDateString())
             ->map->sum('amount_cents');
 
+        // Outras entradas (não vêm de OS): recebidas no mês e as previstas até o fim dele
+        $otherReceived = Income::query()
+            ->whereNotNull('received_at')
+            ->whereDate('received_at', '>=', $start->toDateString())
+            ->whereDate('received_at', '<=', $end->toDateString())
+            ->get(['received_at', 'amount_cents'])
+            ->groupBy(fn (Income $income) => $income->received_at->toDateString())
+            ->map->sum('amount_cents');
+        $pendingIncomes = $end->lt($today) ? collect() : Income::query()->pending()->whereDate('expected_on', '<=', $end->toDateString())->get();
+        $plannedIn = $pendingIncomes
+            ->groupBy(fn (Income $income) => $income->expected_on->lt($today) ? $today->toDateString() : $income->expected_on->toDateString())
+            ->map->sum('amount_cents');
+
         $paidBills = Bill::query()
             ->whereNotNull('paid_at')
             ->whereDate('paid_at', '>=', $start->toDateString())
@@ -55,14 +70,16 @@ class CashFlow
         $balance = $opening;
         for ($day = $start->copy(); $day->lte($end); $day->addDay()) {
             $key = $day->toDateString();
-            $in = (int) ($received[$key] ?? 0);
+            $in = (int) ($received[$key] ?? 0) + (int) ($otherReceived[$key] ?? 0);
             $out = (int) ($paid[$key] ?? 0);
             $plannedOut = $day->gte($today) ? (int) ($planned[$key] ?? 0) : 0;
-            $balance += $in - $out - $plannedOut;
+            $plannedInDay = $day->gte($today) ? (int) ($plannedIn[$key] ?? 0) : 0;
+            $balance += $in + $plannedInDay - $out - $plannedOut;
 
             $days[] = [
                 'date' => $key,
                 'in_cents' => $in,
+                'planned_in_cents' => $plannedInDay,
                 'out_cents' => $out,
                 'planned_out_cents' => $plannedOut,
                 'balance_cents' => $balance,
@@ -70,7 +87,10 @@ class CashFlow
             ];
         }
 
-        $receivedTotal = (int) $received->sum();
+        $ordersReceived = (int) $received->sum();
+        $otherReceivedTotal = (int) $otherReceived->sum();
+        $receivedTotal = $ordersReceived + $otherReceivedTotal;
+        $toReceiveOther = (int) $pendingIncomes->sum('amount_cents');
         $paidTotal = (int) $paid->sum();
         $toPay = $end->lt($today) ? 0 : (int) $openBills->sum('amount_cents');
         $overdue = Bill::query()->open()->whereDate('due_date', '<', $today->toDateString());
@@ -87,7 +107,7 @@ class CashFlow
             $start->gt($today) => $opening,
             default => $this->balanceBefore($today->copy()->addDay()),
         };
-        $projectedEnd = $opening + $receivedTotal - $paidTotal - $toPay;
+        $projectedEnd = $opening + $receivedTotal - $paidTotal - $toPay + $toReceiveOther;
 
         return [
             'month' => $start->format('Y-m'),
@@ -96,6 +116,11 @@ class CashFlow
             'by_category' => $this->byCategory($paidBills, $end->lt($today) ? collect() : $openBills),
             'summary' => [
                 'received_cents' => $receivedTotal,
+                'received_orders_cents' => $ordersReceived,
+                'received_other_cents' => $otherReceivedTotal,
+                // Outras entradas ainda previstas no mês (entram na previsão do fim do mês)
+                'to_receive_other_cents' => $toReceiveOther,
+                'to_receive_other_count' => $pendingIncomes->count(),
                 'paid_cents' => $paidTotal,
                 'net_cents' => $receivedTotal - $paidTotal,
                 'current_balance_cents' => $current,
@@ -121,6 +146,11 @@ class CashFlow
             ->when($since, fn ($query) => $query->whereDate('paid_at', '>=', $since))
             ->whereDate('paid_at', '<', $day->toDateString())
             ->sum('amount_cents');
+        $other = Income::query()
+            ->whereNotNull('received_at')
+            ->when($since, fn ($query) => $query->whereDate('received_at', '>=', $since))
+            ->whereDate('received_at', '<', $day->toDateString())
+            ->sum('amount_cents');
         $out = Bill::query()
             ->whereNotNull('paid_at')
             ->when($since, fn ($query) => $query->whereDate('paid_at', '>=', $since))
@@ -129,7 +159,7 @@ class CashFlow
 
         $opening = $since === null || $day->toDateString() >= $since ? $settings['opening_balance_cents'] : 0;
 
-        return $opening + (int) $in - (int) $out;
+        return $opening + (int) $in + (int) $other - (int) $out;
     }
 
     /**

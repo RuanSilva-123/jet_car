@@ -1,11 +1,12 @@
 <section class="page-header">
   <div>
     <h1>Contas a receber</h1>
-    <p>OS aprovadas com saldo em aberto e o que entrou no caixa. O pagamento é registrado na própria OS.</p>
+    <p>OS com saldo em aberto, o que entrou no caixa e outras entradas que não vêm de OS.</p>
   </div>
   <div class="segmented" role="tablist" aria-label="Financeiro">
     <button type="button" role="tab" [class.is-active]="tab() === 'receivables'" [attr.aria-selected]="tab() === 'receivables'" (click)="tab.set('receivables')">A receber</button>
     <button type="button" role="tab" [class.is-active]="tab() === 'payments'" [attr.aria-selected]="tab() === 'payments'" (click)="tab.set('payments')">Recebimentos</button>
+    <button type="button" role="tab" [class.is-active]="tab() === 'incomes'" [attr.aria-selected]="tab() === 'incomes'" (click)="tab.set('incomes')">Outras entradas</button>
   </div>
 </section>
 
@@ -95,6 +96,8 @@
       }
     </div>
   </article>
+} @else if (tab() === 'incomes') {
+  <app-income-tab />
 } @else {
   <article class="card list">
     <div class="toolbar">
